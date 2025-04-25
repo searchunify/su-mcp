@@ -1,7 +1,11 @@
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 import { SearchUnifyRestClient } from "su-sdk";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 /**
  * Validates that the provided value is a valid file path, the file exists, and loads the JSON content.
@@ -29,20 +33,21 @@ function validateAndLoadJSON(filePath) {
   }
 }
 
-const validateCreds = (args) => {
-  const config = validateAndLoadJSON(args[2]);
+const validateCreds = () => {
+  console.error ('Validating creds...');
+  const credsPath = path.join(__dirname, 'input', 'creds.json');
+  const config = validateAndLoadJSON(credsPath);
   if(!config.uid){
     throw new Error('Invalid parameter: uid is required in the config file.');
   }
   const restClientConfig = { ...config };
   delete restClientConfig.uid;
   const suRestClient = new SearchUnifyRestClient(restClientConfig);
-
+  console.error ('created sdk connection...');
   return {
     suRestClient,
     config
   }
-
 }
 
 export { validateCreds };

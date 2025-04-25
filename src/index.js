@@ -58,10 +58,9 @@ server.tool("search", "Get relevant search results for a search query using Sear
 
 
 async function main() {
-
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  creds = validateCreds(process.argv);
+  creds = validateCreds();
   console.error("SearchUnify MCP Server running on stdio");
 }
 
