@@ -1,13 +1,13 @@
 # SearchUnify MCP Server (`su-mcp`)
 
-The SearchUnify MCP Server (`su-mcp`) enables seamless integration of [SearchUnify](https://www.searchunify.com/) with Claude Desktop.  
-By leveraging the [su-sdk-js](https://www.npmjs.com/package/su-sdk), it allows users to perform searches using their SearchUnify index directly within Claude.
+The SearchUnify MCP Server (`su-mcp`) is a lightweight middleware that enables secure, seamless integration between [SearchUnify Cognitive Search](https://www.searchunify.com/) and third-party applications like Claude Desktop.  
+By leveraging [su-sdk-js](https://www.npmjs.com/package/su-sdk), this library allows developers to invoke context-aware search queries, access enterprise knowledge, and power intelligent workflows directly within external environments
 
 ## Features
 
-- 🔍 **Search Integration**: Use your SearchUnify index to fetch relevant results within Claude.
-- 🔐 **Secure Authentication**: Supports OAuth 2.0 for secure API access.
-- ⚙️ **Dockerized Deployment**: Easy setup using Docker.
+- 🔍 **LLM-Integrated Enterprise Search**: Power GenAI tools like Claude with **context-aware, enterprise-grade search** from SearchUnify—enabling more relevant, trusted, and explainable responses.
+- 🔐 **Enterprise-Grade Security**: Built-in **OAuth 2.0** support ensures **secure token-based access**, protecting sensitive data and enforcing organizational compliance.
+- ⚙️ **Plug-and-Play Deployment**: Get started quickly with a **Docker-based setup**, enabling rapid configuration, portability, and scalability across environments.
 
 ## Prerequisites
 
