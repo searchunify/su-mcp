@@ -136,4 +136,4 @@ dist
 .pnp.*
 
 creds.json
-input/*
+src/input/*
