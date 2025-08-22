@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import { SearchUnifyRestClient } from "su-sdk";
+import { SearchUnifyRestClient, AUTH_TYPES } from "su-sdk";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
