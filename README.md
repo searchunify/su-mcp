@@ -71,7 +71,7 @@ Add the following entry to the `mcpServers` section:
     "-i",
     "--rm",
     "-v",
-    "<path_to_creds.json>:/input/creds.json:ro",
+    "<path_to_creds.json>:/app/src/input/creds.json:ro",
     "searchunifyutils/su-mcp"
   ]
 }
