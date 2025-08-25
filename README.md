@@ -38,10 +38,12 @@ Ensure both the client credentials and the user have the necessary API scopes en
 
 Create a file named `creds.json` with the following structure:
 
+with password 
 ```json
 {
   "instance": "<searchunify_instance_url>",
   "timeout": 60000,
+  "authType": "password",
   "oauth2": {
     "username": "<your_email>",
     "password": "<your_password>",
@@ -51,6 +53,32 @@ Create a file named `creds.json` with the following structure:
   "uid": "<search_client_uid>"
 }
 ```
+
+with apiKey 
+```json
+{
+  "instance": "<searchunify_instance_url>",
+  "timeout": 60000,
+  "authType": "apiKey",
+  "apiKey": "apiKey",
+  "uid": "<search_client_uid>"
+}
+```
+
+with client credentials 
+```json
+{
+  "instance": "<searchunify_instance_url>",
+  "timeout": 60000,
+  "authType": "clientCredentials",
+  "oauth2": {
+    "clientId": "<your_client_id>",
+    "clientSecret": "<your_client_secret>"
+  },
+  "uid": "<search_client_uid>"
+}
+```
+
 Replace placeholders with your actual values.
 
  ### 3. Configure Claude Desktop
