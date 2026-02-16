@@ -1,5 +1,4 @@
 import { createServer as createHttpServer } from "node:http";
-import { randomUUID } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -49,8 +48,10 @@ async function runHttp(creds, port) {
   const getCreds = () => httpCredsStorage.getStore() ?? creds;
   await initializeTools({ server, creds, getCreds });
 
+  // Stateless mode (no sessionIdGenerator) so multiple clients can connect and initialize.
+  // With a sessionIdGenerator, only the first client can initialize; others get "Server already initialized".
   const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => randomUUID(),
+    sessionIdGenerator: undefined,
   });
   await server.connect(transport);
 
