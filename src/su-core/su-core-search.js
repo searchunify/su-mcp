@@ -1,13 +1,22 @@
 import { z } from "zod";
 import { formatForClaude, formatArraysToString } from "./../utils.js";
 
+const aggregationSchema = z.object({
+  type: z.string().describe("aggregation/facet type (e.g. documentation_category, _index)"),
+  filter: z.string().describe("selected filter value (e.g. Search Clients)"),
+});
 
 const initializeSearchTools = async ({ server, creds }) => {
-  server.tool("search", "Get relevant search results for a search query using SearchUnify", {
+  server.tool("search", "Get relevant search results for a search query using SearchUnify. Optionally pass aggregations (facets) from get-filter-options to filter results.", {
     searchString: z.string().min(3).max(100).describe("search query, its a string can be a single word or a sentence"),
-  }, async ({ searchString }) => {
+    aggregations: z.array(aggregationSchema).optional().describe("optional list of facet filters (e.g. from get-filter-options) to narrow results by category, source, etc."),
+  }, async ({ searchString, aggregations }) => {
     const Search = creds.suRestClient.Search();
-    const searchResponse = await Search.getSearchResults({ uid: creds.config.uid, searchString});
+    const requestParams = { uid: creds.config.uid, searchString };
+    if (aggregations?.length) {
+      requestParams.aggregations = aggregations.map((a) => ({ type: a.type, filter: [a.filter] }));
+    }
+    const searchResponse = await Search.getSearchResults(requestParams);
 
     if(!searchResponse?.data){
       return {
@@ -41,6 +50,47 @@ const initializeSearchTools = async ({ server, creds }) => {
     }
     
   });
+
+  server.tool(
+    "get-filter-options",
+    "Get available filter/facet options for a search query using SearchUnify. Uses the same search API; returns aggregationsArray (e.g. Index, Sources, Categories) with their values and counts. Optionally pass current aggregations to get options for a filtered search.",
+    {
+      searchString: z.string().min(3).max(100).describe("search query, a single word or sentence"),
+      aggregations: z.array(aggregationSchema).optional().describe("optional list of current filters to get filter options in context of filtered results"),
+    },
+    async ({ searchString, aggregations }) => {
+      const Search = creds.suRestClient.Search();
+      const requestParams = { uid: creds.config.uid, searchString };
+      if (aggregations?.length) {
+        requestParams.aggregations = aggregations.map((a) => ({ type: a.type, filter: [a.filter] }));
+      }
+      const searchResponse = await Search.getSearchResults(requestParams);
+
+      if (!searchResponse?.data) {
+        return { type: "text", text: "Error: no data in search response." };
+      }
+
+      const raw = searchResponse.data?.result?.aggregationsArray ?? searchResponse.data?.aggregationsArray;
+      if (!Array.isArray(raw)) {
+        return { type: "text", text: "No filter options (aggregationsArray) in response." };
+      }
+
+      const summary = raw.map((agg) => ({
+        key: agg.key,
+        label: agg.label,
+        order: agg.order,
+        values: (agg.values || []).map((v) => ({
+          displayName: v.displayName ?? v.Contentname,
+          value: v.value,
+          contentName: v.Contentname,
+        })),
+      }));
+
+      return {
+        content: [{ type: "text", text: JSON.stringify(summary, null, 2) }],
+      };
+    }
+  );
 }
 
 export { initializeSearchTools };

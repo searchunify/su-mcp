@@ -90,6 +90,27 @@ async function runTest() {
       console.log("\nNo 'search' tool found; skipping tool call.");
     }
 
+    // 4. Optional: call "get-filter-options" tool if present
+    const filterTool = (toolsResult.tools || []).find((t) => t.name === "get-filter-options");
+    if (filterTool) {
+      console.log("\nCalling tool 'get-filter-options' with query 'search client salesforce'...");
+      const filterResult = await client.callTool({
+        name: "get-filter-options",
+        arguments: { searchString: "search client salesforce" },
+      });
+      console.log("Tool result (content length):", filterResult.content?.length ?? 0);
+      if (filterResult.content?.length) {
+        const first = filterResult.content[0];
+        const text = first?.type === "text" ? first.text : JSON.stringify(first);
+        console.log("Filter options preview:", text.slice(0, 400) + (text.length > 400 ? "..." : ""));
+      }
+      if (filterResult.isError) {
+        console.log("Tool reported error:", filterResult.content);
+      }
+    } else {
+      console.log("\nNo 'get-filter-options' tool found; skipping.");
+    }
+
     console.log("\n--- All checks passed ---\n");
   } catch (err) {
     console.error("Test failed:", err);
