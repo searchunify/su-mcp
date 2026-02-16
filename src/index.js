@@ -1,9 +1,10 @@
 import { createServer as createHttpServer } from "node:http";
 import { randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { validateCreds } from "./validations.js";
+import { validateCreds, getCredsFromHeaders } from "./validations.js";
 import { initializeTools } from "./tools.js";
 
 const DEFAULT_HTTP_PORT = 3000;
@@ -41,9 +42,12 @@ async function runStdio(creds) {
   console.error("SearchUnify MCP Server running on stdio");
 }
 
+const httpCredsStorage = new AsyncLocalStorage();
+
 async function runHttp(creds, port) {
   const server = createMcpServer();
-  await initializeTools({ server, creds });
+  const getCreds = () => httpCredsStorage.getStore() ?? creds;
+  await initializeTools({ server, creds, getCreds });
 
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => randomUUID(),
@@ -51,7 +55,15 @@ async function runHttp(creds, port) {
   await server.connect(transport);
 
   const httpServer = createHttpServer((req, res) => {
-    transport.handleRequest(req, res);
+    const ts = new Date().toISOString();
+    const path = req.url ?? "";
+    const method = req.method ?? "";
+    console.error(`[MCP HTTP] ${ts} ${method} ${path}`);
+    const headerCreds = getCredsFromHeaders(req.headers || {});
+    const requestCreds = headerCreds || creds;
+    httpCredsStorage.run(requestCreds, () => {
+      transport.handleRequest(req, res);
+    });
   });
 
   httpServer.listen(port, () => {

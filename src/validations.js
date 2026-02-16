@@ -50,4 +50,54 @@ const validateCreds = () => {
   }
 }
 
-export { validateCreds };
+const HEADER_PREFIX = 'searchunify-';
+
+/**
+ * Build creds from HTTP request headers (for HTTP MCP). Returns null if instance or uid missing.
+ * Header names (lowercase): searchunify-instance, searchunify-uid, searchunify-auth-type, searchunify-api-key, etc.
+ */
+function getCredsFromHeaders(headers) {
+  console.log('getCredsFromHeaders headers', headers);
+  const get = (k) => headers[HEADER_PREFIX + k];
+  const instance = get('instance')?.trim();
+  const uid = get('uid')?.trim();
+  if (!instance || !uid) return null;
+
+  const authType = (get('auth-type') || 'apiKey').toLowerCase();
+  const timeout = parseInt(get('timeout') || '60000', 10);
+  const config = {
+    instance,
+    uid,
+    timeout: Number.isFinite(timeout) ? timeout : 60000,
+    authType: authType === 'apikey' ? 'apiKey' : authType === 'clientcredentials' ? 'clientCredentials' : authType,
+  };
+
+  if (config.authType === 'apiKey') {
+    const apiKey = get('api-key');
+    if (!apiKey) return null;
+    config.apiKey = apiKey;
+  } else if (config.authType === 'password') {
+    config.oauth2 = {
+      username: get('oauth-username'),
+      password: get('oauth-password'),
+      clientId: get('oauth-client-id'),
+      clientSecret: get('oauth-client-secret'),
+    };
+    if (!config.oauth2.username || !config.oauth2.password || !config.oauth2.clientId || !config.oauth2.clientSecret) return null;
+  } else if (config.authType === 'clientCredentials') {
+    config.oauth2 = {
+      clientId: get('oauth-client-id'),
+      clientSecret: get('oauth-client-secret'),
+    };
+    if (!config.oauth2.clientId || !config.oauth2.clientSecret) return null;
+  } else {
+    return null;
+  }
+
+  const restClientConfig = { ...config };
+  delete restClientConfig.uid;
+  const suRestClient = new SearchUnifyRestClient(restClientConfig);
+  return { suRestClient, config };
+}
+
+export { validateCreds, getCredsFromHeaders };

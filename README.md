@@ -120,8 +120,11 @@ The server supports **stdio** (default) and **HTTP** transports so it can work w
 | `MCP_HTTP_PORT`      | number | `3000`  | Port for HTTP transport when `MCP_TRANSPORT` is `http` or `both`. |
 
 - **stdio** – For local tools (e.g. Claude Desktop). Uses stdin/stdout. No env change needed.
-- **http** – MCP over HTTP (Streamable HTTP + SSE). Clients send JSON-RPC to `http://localhost:<MCP_HTTP_PORT>` (GET for SSE, POST for requests).
+- **http** – MCP over HTTP (Streamable HTTP + SSE). Clients send JSON-RPC to `http://localhost:<MCP_HTTP_PORT>` (GET for SSE, POST for requests). Credentials can be sent via request headers (priority) or fallback to `creds.json` (see **HTTP credentials via headers** below).
 - **both** – Runs stdio and HTTP at the same time.
+
+**HTTP credentials via headers (optional)**  
+For HTTP transport only, you can send credentials on each request via headers instead of using `creds.json`. Headers take priority; if they are missing or incomplete, the server falls back to `creds.json`. Header names (lowercase): `searchunify-instance`, `searchunify-uid`, `searchunify-auth-type` (`apiKey` | `password` | `clientCredentials`), `searchunify-api-key` (for apiKey), or `searchunify-oauth-username`, `searchunify-oauth-password`, `searchunify-oauth-client-id`, `searchunify-oauth-client-secret` (for password/clientCredentials). Optional: `searchunify-timeout`.
 
 **Example: run HTTP only on port 4000**
 

@@ -6,13 +6,15 @@ const aggregationSchema = z.object({
   filter: z.string().describe("selected filter value (e.g. Search Clients)"),
 });
 
-const initializeSearchTools = async ({ server, creds }) => {
+const initializeSearchTools = async ({ server, creds, getCreds }) => {
+  const credsForRequest = () => (getCreds ? getCreds() : creds);
   server.tool("search", "Get relevant search results for a search query using SearchUnify. Optionally pass aggregations (facets) from get-filter-options to filter results.", {
     searchString: z.string().min(3).max(100).describe("search query, its a string can be a single word or a sentence"),
     aggregations: z.array(aggregationSchema).optional().describe("optional list of facet filters (e.g. from get-filter-options) to narrow results by category, source, etc."),
   }, async ({ searchString, aggregations }) => {
-    const Search = creds.suRestClient.Search();
-    const requestParams = { uid: creds.config.uid, searchString };
+    const c = credsForRequest();
+    const Search = c.suRestClient.Search();
+    const requestParams = { uid: c.config.uid, searchString };
     if (aggregations?.length) {
       requestParams.aggregations = aggregations.map((a) => ({ type: a.type, filter: [a.filter] }));
     }
@@ -59,8 +61,9 @@ const initializeSearchTools = async ({ server, creds }) => {
       aggregations: z.array(aggregationSchema).optional().describe("optional list of current filters to get filter options in context of filtered results"),
     },
     async ({ searchString, aggregations }) => {
-      const Search = creds.suRestClient.Search();
-      const requestParams = { uid: creds.config.uid, searchString };
+      const c = credsForRequest();
+      const Search = c.suRestClient.Search();
+      const requestParams = { uid: c.config.uid, searchString };
       if (aggregations?.length) {
         requestParams.aggregations = aggregations.map((a) => ({ type: a.type, filter: [a.filter] }));
       }
