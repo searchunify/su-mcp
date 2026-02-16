@@ -110,17 +110,70 @@ Make sure `<path_to_creds.json>` is the full path to your `creds.json` file.
 ### 4. Restart Claude Desktop
 Restart Claude to apply the updated configuration.
 
-### 5. Usage
+### 5. Transport: stdio and HTTP
+
+The server supports **stdio** (default) and **HTTP** transports so it can work with Claude Desktop (stdio) or remote clients over HTTP.
+
+| Environment variable | Values | Default | Description |
+|----------------------|--------|---------|-------------|
+| `MCP_TRANSPORT`      | `stdio`, `http`, `both` | `stdio` | Which transport(s) to run. |
+| `MCP_HTTP_PORT`      | number | `3000`  | Port for HTTP transport when `MCP_TRANSPORT` is `http` or `both`. |
+
+- **stdio** – For local tools (e.g. Claude Desktop). Uses stdin/stdout. No env change needed.
+- **http** – MCP over HTTP (Streamable HTTP + SSE). Clients send JSON-RPC to `http://localhost:<MCP_HTTP_PORT>` (GET for SSE, POST for requests).
+- **both** – Runs stdio and HTTP at the same time.
+
+**Example: run HTTP only on port 4000**
+
+```bash
+MCP_TRANSPORT=http MCP_HTTP_PORT=4000 node src/index.js
+```
+
+**Example: run both stdio and HTTP**
+
+```bash
+MCP_TRANSPORT=both MCP_HTTP_PORT=3000 node src/index.js
+```
+
+### 6. Usage
 Once configured, Claude Desktop will be able to fetch search results using your SearchUnify instance via su-mcp.
 
-### 6. Troubleshooting
+### 7. Testing the MCP server
+
+A small test client is provided to verify the server (stdio or HTTP).
+
+**Test stdio** (spawns the server; requires `src/input/creds.json`):
+
+```bash
+npm run test:stdio
+# or
+node scripts/test-mcp-client.js stdio
+```
+
+**Test HTTP** (start the server first in another terminal, then run):
+
+```bash
+# Terminal 1
+MCP_TRANSPORT=http node src/index.js
+
+# Terminal 2
+npm run test:http
+# or
+node scripts/test-mcp-client.js http
+```
+
+Use `MCP_HTTP_URL` for a different base URL (e.g. `MCP_HTTP_URL=http://localhost:4000 node scripts/test-mcp-client.js http`).
+
+The test client connects, lists tools, pings the server, and optionally calls the `search` tool with a minimal query.
+
+### 8. Troubleshooting
 **Docker Not Found**: Ensure Docker is installed and added to your system's path.
 
 **Invalid Credentials**: Double-check values in creds.json.
 
 **Missing API Scopes**: Make sure the client and user have the required search scopes enabled in your SearchUnify instance.
 
-### 7. License
+### 9. License
 This project is licensed under the BSD 2-Clause License.
 See the LICENSE file for details.
 
