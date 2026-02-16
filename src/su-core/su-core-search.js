@@ -11,10 +11,31 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
   server.tool("search", "Get relevant search results for a search query using SearchUnify. Optionally pass aggregations (facets) from get-filter-options to filter results.", {
     searchString: z.string().min(3).max(100).describe("search query, its a string can be a single word or a sentence"),
     aggregations: z.array(aggregationSchema).optional().describe("optional list of facet filters (e.g. from get-filter-options) to narrow results by category, source, etc."),
-  }, async ({ searchString, aggregations }) => {
+    page: z.number().int().min(1).optional().describe("page number for pagination, starts from 1"),
+    pageSize: z.number().int().min(1).max(100).optional().describe("number of results per page, default is 10"),
+    sortBy: z.enum(["_score", "post_time"]).optional().describe("field to sort results by, e.g. _score or post_time"),
+    sortOrder: z.enum(["asc", "desc"]).optional().describe("sort order for results, asc or desc"),
+  }, async ({ searchString, aggregations, page, pageSize, sortBy, sortOrder }) => {
     const c = credsForRequest();
     const Search = c.suRestClient.Search();
-    const requestParams = { uid: c.config.uid, searchString };
+    //const requestParams = { uid: c.config.uid, searchString };
+    
+    const effectivePage = page ?? 1;
+    const effectivePageSize = pageSize ?? 10;
+    const from = (effectivePage - 1) * effectivePageSize;
+
+    const requestParams = {
+     uid: c.config.uid,
+     searchString,
+     pageNo: effectivePage,
+     from,
+     pageSize: effectivePageSize,
+     ...(sortBy ? { sortby: sortBy } : {}),
+     ...(sortOrder ? { orderBy: sortOrder } : {}),
+     // ...(aggregations ? { aggregations } : {}),
+     ...(extraParams || {}),
+   };
+    
     if (aggregations?.length) {
       requestParams.aggregations = aggregations.map((a) => ({ type: a.type, filter: [a.filter] }));
     }
