@@ -283,7 +283,7 @@ All header names use the `searchunify-` prefix (lowercase):
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `searchunify-instance` | Yes | Your SearchUnify instance URL (e.g. `https://production1.searchunify.ai`). |
+| `searchunify-instance` | Yes | Your SearchUnify instance URL (e.g. `<searchUnify instance url>`). |
 | `searchunify-uid` | Yes | Search Client UID. |
 | `searchunify-auth-type` | Yes | Authentication method: `apiKey`, `password`, or `clientCredentials`. |
 | `searchunify-timeout` | No | Request timeout in milliseconds. Defaults to `60000`. |
@@ -309,7 +309,7 @@ All header names use the `searchunify-` prefix (lowercase):
         "mcp-remote",
         "https://feature4.searchunify.com/su-mcp/",
         "--header",
-        "searchunify-instance:https://production1.searchunify.ai",
+        "searchunify-instance:<searchUnify instance url>",
         "--header",
         "searchunify-timeout:60000",
         "--header",
@@ -335,7 +335,7 @@ All header names use the `searchunify-` prefix (lowercase):
         "mcp-remote",
         "https://<your-mcp-host>/su-mcp/",
         "--header",
-        "searchunify-instance:https://production1.searchunify.ai",
+        "searchunify-instance:<searchUnify instance url>",
         "--header",
         "searchunify-timeout:60000",
         "--header",
@@ -367,7 +367,7 @@ All header names use the `searchunify-` prefix (lowercase):
         "mcp-remote",
         "https://<your-mcp-host>/su-mcp/",
         "--header",
-        "searchunify-instance:https://production1.searchunify.ai",
+        "searchunify-instance:<searchUnify instance url>",
         "--header",
         "searchunify-timeout:60000",
         "--header",
