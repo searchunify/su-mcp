@@ -14,8 +14,9 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     page: z.number().int().min(1).max(100).optional().describe("page number for pagination, starts from 1"),
     pageSize: z.number().int().min(1).max(100).optional().describe("number of results per page, default is 10"),
     sortBy: z.enum(["_score", "post_time"]).optional().describe("field to sort results by, e.g. _score or post_time"),
+    versionResults: z.boolean().default(true).optional().describe("This field speicifies whether to use versioning or not. Default value is true."),
     // sortOrder: z.enum(["asc", "desc"]).optional().describe("sort order for results, asc or desc"),
-  }, async ({ searchString, aggregations, page, pageSize, sortBy }) => {
+  }, async ({ searchString, aggregations, page, pageSize, sortBy, versionResults }) => {
     const c = credsForRequest();
     const Search = c.suRestClient.Search();
     //const requestParams = { uid: c.config.uid, searchString };
@@ -30,6 +31,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       searchString,
       from,
       resultsPerPage: effectivePageSize,
+      versionResults,
       ...(sortBy ? { sortby: sortBy } : {}),
     //  ...(sortOrder ? { orderBy: sortOrder } : {}),
     //  ...(aggregations ? { aggregations } : {}),
