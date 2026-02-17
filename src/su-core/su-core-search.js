@@ -39,6 +39,9 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     if (aggregations?.length) {
       requestParams.aggregations = aggregations.map((a) => ({ type: a.type, filter: [a.filter] }));
     }
+
+    console.error("[INFO] - Request parameters being sent to search API : ", JSON.stringify(requestParams));
+    
     const searchResponse = await Search.getSearchResults(requestParams);
 
     if(!searchResponse?.data){
@@ -48,9 +51,11 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       }
     }
     const gptActive = searchResponse?.data?.searchClientSettings?.gptConfig?.gptActive;
-    console.error('gptActive',gptActive);
+    console.error('[INFO] - gptActive',gptActive);
     if(gptActive){
       const contexts = searchResponse.data.searchClientSettings.gptConfig.gptContext.split("_SULLM_");
+
+      console.error('[INFO] - Number of gpt contexts received from Search: ', contexts?.length);
 
       for(let i = 0; i < contexts.length; i++) {
         if(searchResponse.data.searchClientSettings.gptConfig.gptLinks[i - 1]){
@@ -59,8 +64,10 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       }
       return formatForClaude(searchResponse.data.searchClientSettings.gptConfig.gptLinks); 
     } else {
-
       const contexts = [];
+      
+      console.error('[INFO] - Number of search hits received in response: ', searchResponse.data?.result?.hits?.length);
+      
       for(let i = 0; i < searchResponse.data?.result?.hits?.length; i++){
         contexts.push({
         title: formatArraysToString(searchResponse.data.result.hits[i].highlight.TitleToDisplayString),
