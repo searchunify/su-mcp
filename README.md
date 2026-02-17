@@ -81,6 +81,8 @@ with client credentials
 
 Replace placeholders with your actual values.
 
+Note: The timeout value must not be lesser than 30000ms as this is a pre-requisite for [su-sdk](https://github.com/searchunify/su-sdk-js/) 
+
  ### 3. Configure Claude Desktop
 
 Locate the Claude Desktop configuration file:
