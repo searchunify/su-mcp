@@ -33,9 +33,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       resultsPerPage: effectivePageSize,
       versionResults: !!versionResults,
       ...(sortBy ? { sortby: sortBy } : {}),
-    //  ...(sortOrder ? { orderBy: sortOrder } : {}),
-    //  ...(aggregations ? { aggregations } : {}),
-    //  ...(extraParams || {}),
+      orderBy: 'desc'
    };
     
     if (aggregations?.length) {
