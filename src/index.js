@@ -73,21 +73,23 @@ async function runHttp(creds, port) {
 }
 
 async function main() {
-  const creds = validateCreds();
   const mode = getTransportMode();
   const port = getHttpPort();
 
+  // Important: for stdio mode, creds JSON must be provided in the input/creds.json file.
   if (mode === TRANSPORT_STDIO) {
+    const creds = validateCreds();
     await runStdio(creds);
     return;
   }
 
   if (mode === TRANSPORT_HTTP) {
-    await runHttp(creds, port);
+    await runHttp(null, port);
     return;
   }
 
   if (mode === TRANSPORT_BOTH) {
+    const creds = validateCreds();
     await runHttp(creds, port);
     await runStdio(creds);
     return;
