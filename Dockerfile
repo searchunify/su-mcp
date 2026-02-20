@@ -1,15 +1,15 @@
-# Use Node24 Alpine base image
 FROM node:24-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files and install dependencies
-COPY package*.json ./
-RUN npm ci --omit=dev
+COPY package.json package-lock.json* ./
 
-# Copy source files
+RUN npm install
+
 COPY . .
 
-# Default command (adjust path if needed)
-ENTRYPOINT ["node", "src/index.js"]
+EXPOSE 3099
+
+ENV MCP_TRANSPORT=http
+
+CMD ["node", "src/index.js"]
