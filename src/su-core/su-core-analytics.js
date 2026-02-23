@@ -9,7 +9,8 @@ const reportTypes = {
   getAllSearchConversion: "getAllSearchConversion"
 };
 
-const initializeAnalyticsTools = async ({ server, creds }) => {
+const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
+  const c = () => (getCreds ? getCreds() : creds);
   server.tool("analytics", "get analytics reports data from searchunify", {
     reportType: z.enum(Object.values(reportTypes)).describe("type of analytics report to fetch data from"),
     startDate: z.string().describe("start date of the report"),
@@ -17,28 +18,29 @@ const initializeAnalyticsTools = async ({ server, creds }) => {
     count: z.number().describe("number of records to be fetched"),
 
   }, async ({ reportType, startDate, endDate, count }) => {
-    const Analytics = creds.suRestClient.Analytics();
+    const credsForRequest = c();
+    const Analytics = credsForRequest.suRestClient.Analytics();
     let analyticsResponse = {};
     switch(reportType){
       case reportTypes.searchQueryWithNoClicks:
         console.error('searchQueryWithNoClicks triggered');
-        analyticsResponse = await Analytics.searchQueryWithNoClicks({ searchClientId: creds.config.uid, startDate, endDate, count });
+        analyticsResponse = await Analytics.searchQueryWithNoClicks({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
         break;
       case reportTypes.searchQueryWithResult:
         console.error('searchQueryWithResult triggered');
-        analyticsResponse = await Analytics.searchQueryWithResult({ searchClientId: creds.config.uid, startDate, endDate, count });
+        analyticsResponse = await Analytics.searchQueryWithResult({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
         break;
       case reportTypes.searchQueryWithoutResults:
         console.error('searchQueryWithoutResults triggered');
-        analyticsResponse = await Analytics.searchQueryWithoutResults({ searchClientId: creds.config.uid, startDate, endDate, count });
+        analyticsResponse = await Analytics.searchQueryWithoutResults({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
         break;
       case reportTypes.getAllSearchQuery:
         console.error('getAllSearchQuery triggered');
-        analyticsResponse = await Analytics.getAllSearchQuery({ searchClientId: creds.config.uid, startDate, endDate, count });
+        analyticsResponse = await Analytics.getAllSearchQuery({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
         break;
       case reportTypes.getAllSearchConversion:
         console.error('getAllSearchConversion triggered');
-        analyticsResponse = await Analytics.getAllSearchConversion({ searchClientId: creds.config.uid, startDate, endDate, count });
+        analyticsResponse = await Analytics.getAllSearchConversion({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
         break;
       default:
         console.error('invalid reportType ', reportType);
