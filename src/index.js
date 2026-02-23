@@ -12,9 +12,9 @@ const TRANSPORT_HTTP = "http";
 const TRANSPORT_BOTH = "both";
 
 function getTransportMode() {
-  const raw = (process.env.MCP_TRANSPORT || TRANSPORT_STDIO).toLowerCase();
-  if (raw === TRANSPORT_HTTP || raw === TRANSPORT_BOTH) return raw;
-  return TRANSPORT_STDIO;
+  const raw = (process.env.MCP_TRANSPORT ?? "").toLowerCase();
+  if (raw === TRANSPORT_HTTP || raw === TRANSPORT_BOTH || raw === TRANSPORT_STDIO) return raw;
+  return TRANSPORT_BOTH;
 }
 
 function getHttpPort() {
@@ -75,7 +75,7 @@ async function runHttp(creds, port) {
 async function main() {
   const mode = getTransportMode();
   const port = getHttpPort();
-
+  console.error('mode: ', mode);
   // Important: for stdio mode, creds JSON must be provided in the input/creds.json file.
   if (mode === TRANSPORT_STDIO) {
     const creds = validateCreds();
@@ -89,9 +89,14 @@ async function main() {
   }
 
   if (mode === TRANSPORT_BOTH) {
-    const creds = validateCreds();
-    await runHttp(creds, port);
-    await runStdio(creds);
+    try {
+      const creds = validateCreds();
+      await runHttp(creds, port);
+      await runStdio(creds);
+    } catch (err) {
+      console.error("validateCreds failed in TRANSPORT_BOTH mode, falling back to stdio only:", err?.message ?? err);
+      await runStdio(null);
+    }
     return;
   }
 
