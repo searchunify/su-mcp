@@ -91,16 +91,14 @@ async function main() {
   if (mode === TRANSPORT_BOTH) {
     try {
       const creds = validateCreds();
-      await runHttp(creds, port);
       await runStdio(creds);
     } catch (err) {
-      console.error("validateCreds failed in TRANSPORT_BOTH mode, falling back to stdio only:", err?.message ?? err);
-      await runStdio(null);
+      console.error("validateCreds failed in TRANSPORT_BOTH mode, falling back to http only:", err?.message ?? err);
     }
+    await runHttp(null, port);
     return;
   }
 
-  await runStdio(creds);
 }
 
 main().catch((error) => {

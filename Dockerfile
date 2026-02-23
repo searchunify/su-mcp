@@ -10,6 +10,6 @@ COPY . .
 
 EXPOSE 3099
 
-ENV MCP_TRANSPORT=http
+ENV MCP_TRANSPORT=both
 
 CMD ["node", "src/index.js"]
