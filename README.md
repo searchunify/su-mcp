@@ -247,7 +247,7 @@ Restart Claude to apply the updated configuration.
 
 ### Integration 2: Remote HTTP via `mcp-remote` (Streamable HTTP)
 
-For connecting to a remotely hosted SearchUnify MCP server over HTTP, use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote). Credentials are passed as HTTP headers on every request -- no local `creds.json` is needed.
+For connecting to a remotely hosted SearchUnify MCP server over HTTP, use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote). Credentials are passed as HTTP headers on every request -- no local `creds.json` is needed. To run su-mcp via mcp-remote **node version 24** is required on the machine.
 
 #### Claude Desktop Configuration
 
