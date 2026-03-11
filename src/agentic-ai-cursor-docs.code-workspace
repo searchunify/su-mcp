@@ -1,0 +1,26 @@
+{
+	"folders": [
+		{
+			"path": "../../../../agentic-suite-dev-setup/micro-services/agentic-ai-cursor-docs"
+		},
+		{
+			"path": "../../../../agentic-suite-dev-setup/micro-services/agentic-suite-admin-server"
+		},
+		{
+			"path": "../../../../agentic-suite-dev-setup/micro-services/agentic-suite-admin-ui"
+		},
+		{
+			"path": "../../../../agentic-suite-dev-setup/micro-services/agentic-suite-analytics"
+		},
+		{
+			"path": "../../../../agentic-suite-dev-setup/micro-services/agentic-suite-client-ui"
+		},
+		{
+			"path": "../../../../agentic-suite-dev-setup/micro-services/agentic-suite-connectors"
+		},
+		{
+			"path": "../../../../agentic-suite-dev-setup/micro-services/agentic-suite-tool-executor"
+		}
+	],
+  "settings": {}
+}
