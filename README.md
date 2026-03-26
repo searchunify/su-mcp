@@ -143,14 +143,14 @@ The server supports two transport mechanisms and can run them simultaneously.
 
 | Environment Variable | Values | Default | Description |
 |----------------------|--------|---------|-------------|
-| `MCP_TRANSPORT` | `stdio`, `http`, `both` | `stdio` | Which transport(s) to start. |
+| `MCP_TRANSPORT` | `stdio`, `http`, `both` | `both` | Which transport(s) to start. |
 | `MCP_HTTP_PORT` | number | `3000` | Port for the HTTP transport (when mode is `http` or `both`). |
 
 ### stdio Transport
 
 - Used by local MCP clients such as Claude Desktop.
 - Communicates over stdin/stdout.
-- No additional configuration needed -- this is the default.
+- No additional configuration needed.
 
 ### HTTP Transport (Streamable HTTP)
 
@@ -442,8 +442,10 @@ The test client connects, lists all available tools, pings the server, and optio
 
 ```
 su-mcp/
-├── Dockerfile                  # Docker image definition (Node 24 Alpine)
-├── package.json                # Dependencies and scripts
+├── Dockerfile                  # Docker image definition (Node 24 Alpine, default transport: both)
+├── package.json                # Dependencies and scripts (su-sdk ^2.1.0)
+├── test/
+│   └── test-new-tools.js       # Unit tests for new tools
 ├── scripts/
 │   └── test-mcp-client.js      # Test client for stdio and HTTP
 └── src/
