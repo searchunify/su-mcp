@@ -5,7 +5,7 @@ export const formatForClaude = (dataArray) => {
 
   const text = arr.map(obj => {
     return Object.entries(obj)
-      .map(([key, value]) => `${key}: ${value}`)
+      .map(([key, value]) => `${key}: ${typeof value === 'object' && value !== null ? JSON.stringify(value) : value}`)
       .join('\n');
   }).join('\n---\n');
 
