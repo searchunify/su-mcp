@@ -259,11 +259,55 @@ Replace `<path_to_creds.json>` with the absolute path to your `creds.json` file.
 
 #### Step 3 -- Restart Claude Desktop
 
-Restart Claude to apply the updated configuration.
+Fully quit (**Cmd+Q** on macOS) and reopen Claude Desktop to apply the updated configuration.
 
 ---
 
-### Integration 2: Remote HTTP via `mcp-remote` (Streamable HTTP)
+### Integration 2: Local Node.js (stdio)
+
+Run the MCP server directly with Node.js without Docker. Requires Node.js 18+ and a `creds.json` file.
+
+#### Step 1 -- Clone and install
+
+```bash
+git clone https://github.com/searchunify/su-mcp.git
+cd su-mcp
+npm install
+```
+
+#### Step 2 -- Create credentials file
+
+Create `src/input/creds.json` with your credentials (see Integration 1, Step 1 for format options).
+
+#### Step 3 -- Configure Claude Desktop
+
+```json
+{
+  "mcpServers": {
+    "su-mcp": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/su-mcp/src/index.js"
+      ],
+      "env": {
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}
+```
+
+Replace `/absolute/path/to/su-mcp` with the actual path where you cloned the repository.
+
+> **Note:** Setting `MCP_TRANSPORT` to `stdio` is recommended for local Claude Desktop usage. If omitted, the default is `both`, which also starts an HTTP server on port 3000.
+
+#### Step 4 -- Restart Claude Desktop
+
+Fully quit (Cmd+Q on macOS) and reopen Claude Desktop to apply the updated configuration.
+
+---
+
+### Integration 3: Remote HTTP via `mcp-remote` (Streamable HTTP)
 
 For connecting to a remotely hosted SearchUnify MCP server over HTTP, use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote). Credentials are passed as HTTP headers on every request -- no local `creds.json` is needed. To run su-mcp via mcp-remote **node version 24** is required on the machine.
 
