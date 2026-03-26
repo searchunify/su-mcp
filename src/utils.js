@@ -1,5 +1,9 @@
 export const formatForClaude = (dataArray) => {
-  const text = dataArray.map(obj => {
+  const arr = Array.isArray(dataArray)
+    ? dataArray
+    : Object.values(dataArray).find(Array.isArray) ?? [dataArray];
+
+  const text = arr.map(obj => {
     return Object.entries(obj)
       .map(([key, value]) => `${key}: ${value}`)
       .join('\n');
