@@ -322,7 +322,7 @@ Add the following to your Claude Desktop `claude_desktop_config.json`:
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://<your-mcp-host>/su-mcp/",
+        "https://mcp.searchunify.com/mcp",
         "--header",
         "searchunify-instance:<searchunify_instance_url>",
         "--header",
@@ -369,7 +369,7 @@ All header names use the `searchunify-` prefix (lowercase):
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://<your-mcp-host>/su-mcp/",
+        "https://mcp.searchunify.com/mcp",
         "--header",
         "searchunify-instance:https://your-instance.searchunify.com",
         "--header",
@@ -395,7 +395,7 @@ All header names use the `searchunify-` prefix (lowercase):
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://<your-mcp-host>/su-mcp/",
+        "https://mcp.searchunify.com/mcp",
         "--header",
         "searchunify-instance:https://your-instance.searchunify.com",
         "--header",
@@ -427,7 +427,7 @@ All header names use the `searchunify-` prefix (lowercase):
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://<your-mcp-host>/su-mcp/",
+        "https://mcp.searchunify.com/mcp",
         "--header",
         "searchunify-instance:https://your-instance.searchunify.com",
         "--header",
