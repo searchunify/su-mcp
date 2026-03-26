@@ -42,36 +42,24 @@ describe('Analytics tool - reportTypes', () => {
   });
 });
 
-// --- Test analytics tool schema with offset ---
+// --- Test analytics tool schema ---
 
-describe('Analytics tool - offset param schema', () => {
+describe('Analytics tool - schema', () => {
   const analyticsSchema = z.object({
     reportType: z.string(),
     startDate: z.string(),
     endDate: z.string(),
     count: z.number(),
-    offset: z.number().optional(),
   });
 
-  it('should accept request without offset', () => {
+  it('should accept valid request', () => {
     const result = analyticsSchema.parse({
       reportType: 'getAllSearchQuery',
       startDate: '2025-01-01',
       endDate: '2025-01-31',
       count: 10,
     });
-    assert.equal(result.offset, undefined);
-  });
-
-  it('should accept request with offset', () => {
-    const result = analyticsSchema.parse({
-      reportType: 'getAllSearchQuery',
-      startDate: '2025-01-01',
-      endDate: '2025-01-31',
-      count: 10,
-      offset: 2,
-    });
-    assert.equal(result.offset, 2);
+    assert.equal(result.count, 10);
   });
 });
 

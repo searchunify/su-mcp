@@ -18,40 +18,39 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
     startDate: z.string().describe("start date of the report"),
     endDate: z.string().describe("end date of the report"),
     count: z.number().describe("number of records to be fetched"),
-    offset: z.number().optional().describe("page offset for paginated results"),
 
-  }, async ({ reportType, startDate, endDate, count, offset }) => {
+  }, async ({ reportType, startDate, endDate, count }) => {
     const credsForRequest = c();
     const Analytics = credsForRequest.suRestClient.Analytics();
     let analyticsResponse = {};
     switch(reportType){
       case reportTypes.searchQueryWithNoClicks:
         console.error('searchQueryWithNoClicks triggered');
-        analyticsResponse = await Analytics.searchQueryWithNoClicks({ searchClientId: credsForRequest.config.uid, startDate, endDate, count, offset });
+        analyticsResponse = await Analytics.searchQueryWithNoClicks({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
         break;
       case reportTypes.searchQueryWithResult:
         console.error('searchQueryWithResult triggered');
-        analyticsResponse = await Analytics.searchQueryWithResult({ searchClientId: credsForRequest.config.uid, startDate, endDate, count, offset });
+        analyticsResponse = await Analytics.searchQueryWithResult({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
         break;
       case reportTypes.searchQueryWithoutResults:
         console.error('searchQueryWithoutResults triggered');
-        analyticsResponse = await Analytics.searchQueryWithoutResults({ searchClientId: credsForRequest.config.uid, startDate, endDate, count, offset });
+        analyticsResponse = await Analytics.searchQueryWithoutResults({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
         break;
       case reportTypes.getAllSearchQuery:
         console.error('getAllSearchQuery triggered');
-        analyticsResponse = await Analytics.getAllSearchQuery({ searchClientId: credsForRequest.config.uid, startDate, endDate, count, offset });
+        analyticsResponse = await Analytics.getAllSearchQuery({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
         break;
       case reportTypes.getAllSearchConversion:
         console.error('getAllSearchConversion triggered');
-        analyticsResponse = await Analytics.getAllSearchConversion({ searchClientId: credsForRequest.config.uid, startDate, endDate, count, offset });
+        analyticsResponse = await Analytics.getAllSearchConversion({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
         break;
       case reportTypes.averageClickPosition:
         console.error('averageClickPosition triggered');
-        analyticsResponse = await Analytics.getAverageClickPosition({ searchClientId: credsForRequest.config.uid, startDate, endDate, count, offset });
+        analyticsResponse = await Analytics.getAverageClickPosition({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
         break;
       case reportTypes.sessionDetails:
         console.error('sessionDetails triggered');
-        analyticsResponse = await Analytics.getSessionDetails({ searchClientId: credsForRequest.config.uid, startDate, endDate, count, startIndex: offset });
+        analyticsResponse = await Analytics.getSessionDetails({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
         break;
       default:
         console.error('invalid reportType ', reportType);
