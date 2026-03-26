@@ -112,8 +112,8 @@ Lists all search clients configured in the SearchUnify instance. Returns minimal
 - A [SearchUnify](https://www.searchunify.com/) account with:
   - A valid instance URL
   - Authentication credentials (API Key **or** OAuth 2.0 credentials)
-  - A Search Client UID
-  - API scopes enabled for search and analytics operations
+  - A Search Client UID (found in SearchUnify admin panel under Search Clients, or use the `get-search-clients` tool to list all available UIDs)
+  - API scopes enabled (set scope to "All" for full access, or enable specific scopes for search, analytics, and content operations)
 - [Docker](https://www.docker.com/) installed (for Docker-based deployment)
 - An MCP-compatible client (e.g. Claude Desktop, Cursor)
 
@@ -265,7 +265,7 @@ Fully quit (**Cmd+Q** on macOS) and reopen Claude Desktop to apply the updated c
 
 ### Integration 2: Local Node.js (stdio)
 
-Run the MCP server directly with Node.js without Docker. Requires Node.js 18+ and a `creds.json` file.
+Run the MCP server directly with Node.js without Docker. Requires **Node.js 18+** (Node 20+ recommended) and a `creds.json` file.
 
 #### Step 1 -- Clone and install
 
@@ -345,7 +345,7 @@ All header names use the `searchunify-` prefix (lowercase):
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `searchunify-instance` | Yes | Your SearchUnify instance URL (e.g. `<searchUnify instance url>`). |
+| `searchunify-instance` | Yes | Your SearchUnify instance URL (e.g. `https://your-instance.searchunify.com`). |
 | `searchunify-uid` | Yes | Search Client UID. |
 | `searchunify-auth-type` | Yes | Authentication method: `apiKey`, `password`, or `clientCredentials`. |
 | `searchunify-timeout` | No | Request timeout in milliseconds. Defaults to `60000`. |
@@ -369,17 +369,17 @@ All header names use the `searchunify-` prefix (lowercase):
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://feature4.searchunify.com/su-mcp/",
+        "https://<your-mcp-host>/su-mcp/",
         "--header",
-        "searchunify-instance:<searchUnify instance url>",
+        "searchunify-instance:https://your-instance.searchunify.com",
         "--header",
         "searchunify-timeout:60000",
         "--header",
         "searchunify-auth-type:apiKey",
         "--header",
-        "searchunify-api-key:45dc9f1871909fb88df76ba04077278e",
+        "searchunify-api-key:<your_api_key>",
         "--header",
-        "searchunify-uid:5fb13af5-0034-11f1-b6ce-26d6deef0cad"
+        "searchunify-uid:<search_client_uid>"
       ]
     }
   }
@@ -397,7 +397,7 @@ All header names use the `searchunify-` prefix (lowercase):
         "mcp-remote",
         "https://<your-mcp-host>/su-mcp/",
         "--header",
-        "searchunify-instance:<searchUnify instance url>",
+        "searchunify-instance:https://your-instance.searchunify.com",
         "--header",
         "searchunify-timeout:60000",
         "--header",
@@ -429,7 +429,7 @@ All header names use the `searchunify-` prefix (lowercase):
         "mcp-remote",
         "https://<your-mcp-host>/su-mcp/",
         "--header",
-        "searchunify-instance:<searchUnify instance url>",
+        "searchunify-instance:https://your-instance.searchunify.com",
         "--header",
         "searchunify-timeout:60000",
         "--header",
@@ -479,6 +479,14 @@ MCP_HTTP_URL=http://localhost:4000 node scripts/test-mcp-client.js http
 ```
 
 The test client connects, lists all available tools, pings the server, and optionally calls the `search` and `get-filter-options` tools with sample queries.
+
+**Unit tests** (no credentials needed):
+
+```bash
+npm test
+```
+
+Runs validation and module import tests for all tools.
 
 ---
 
