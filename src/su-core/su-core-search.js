@@ -122,6 +122,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       };
     }
   );
+
 }
 
 export { initializeSearchTools };

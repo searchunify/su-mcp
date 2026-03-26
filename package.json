@@ -17,6 +17,7 @@
     "typescript": "^5.8.3"
   },
   "scripts": {
+    "test": "node --test 'test/**/*.js'",
     "test:stdio": "node scripts/test-mcp-client.js stdio",
     "test:http": "node scripts/test-mcp-client.js http"
   }
