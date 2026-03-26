@@ -31,6 +31,7 @@ Performs a search query against your SearchUnify instance and returns relevant r
 | `page` | `integer` | No | Page number for pagination (1-100). Defaults to `1`. |
 | `pageSize` | `integer` | No | Number of results per page (1-100). Defaults to `10`. |
 | `sortBy` | `string` | No | Field to sort results by. Allowed values: `_score` (relevance) or `post_time` (date). |
+| `versionResults` | `boolean` | No | Whether to use versioning. Defaults to `false`. |
 
 **Aggregation object schema:**
 
@@ -102,7 +103,7 @@ Lists all search clients configured in the SearchUnify instance. Returns minimal
 | `id` | Search client ID. |
 | `name` | Search client name. |
 | `uid` | Search client unique identifier (UUID). |
-| `search_client_type` | Type of search client (e.g. Web App, Salesforce, etc.). |
+| `search_client_type` | Type of search client (e.g. Web App, Salesforce, etc.). Available on instances running admin v25-nov or later. |
 
 ---
 
