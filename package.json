@@ -10,13 +10,14 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.10.1",
     "zod": "^3.24.3",
-    "su-sdk":"2.0.1"
+    "su-sdk":"2.1.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.1",
     "typescript": "^5.8.3"
   },
   "scripts": {
+    "test": "node --test 'test/**/*.js'",
     "test:stdio": "node scripts/test-mcp-client.js stdio",
     "test:http": "node scripts/test-mcp-client.js http"
   }

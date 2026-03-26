@@ -6,7 +6,9 @@ const reportTypes = {
   searchQueryWithResult: "searchQueryWithResult",
   searchQueryWithoutResults: "searchQueryWithoutResults",
   getAllSearchQuery: "getAllSearchQuery",
-  getAllSearchConversion: "getAllSearchConversion"
+  getAllSearchConversion: "getAllSearchConversion",
+  averageClickPosition: "averageClickPosition",
+  sessionDetails: "sessionDetails"
 };
 
 const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
@@ -42,6 +44,14 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         console.error('getAllSearchConversion triggered');
         analyticsResponse = await Analytics.getAllSearchConversion({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
         break;
+      case reportTypes.averageClickPosition:
+        console.error('averageClickPosition triggered');
+        analyticsResponse = await Analytics.getAverageClickPosition({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
+        break;
+      case reportTypes.sessionDetails:
+        console.error('sessionDetails triggered');
+        analyticsResponse = await Analytics.getSessionDetails({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
+        break;
       default:
         console.error('invalid reportType ', reportType);
     }
@@ -54,7 +64,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
     }
     console.error('analyticsResponse',analyticsResponse.data);
     return formatForClaude(analyticsResponse.data);
-    
+
   });
 }
 
