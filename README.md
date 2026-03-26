@@ -18,7 +18,7 @@ By leveraging [su-sdk-js](https://www.npmjs.com/package/su-sdk), this server exp
 
 ## Tools
 
-The MCP server exposes **3 tools** that AI assistants can invoke:
+The MCP server exposes **4 tools** that AI assistants can invoke:
 
 ### 1. `search`
 
@@ -86,6 +86,23 @@ Retrieves analytics reports from SearchUnify.
 | `searchQueryWithoutResults` | Search queries that returned zero results. |
 | `getAllSearchQuery` | All search queries. |
 | `getAllSearchConversion` | All search conversion data. |
+| `averageClickPosition` | Average click position data per search query. Returns ACP, click count, search count, and session count. |
+| `sessionDetails` | Session activity logs including page views, searches, conversions, and case events. |
+
+---
+
+### 4. `get-search-clients`
+
+Lists all search clients configured in the SearchUnify instance. Returns minimal information for each search client. No parameters required -- the tenant is derived from the authentication credentials.
+
+**Returns:** An array of search clients, each containing:
+
+| Field | Description |
+|-------|-------------|
+| `id` | Search client ID. |
+| `name` | Search client name. |
+| `uid` | Search client unique identifier (UUID). |
+| `search_client_type` | Type of search client (e.g. Web App, Salesforce, etc.). |
 
 ---
 
@@ -436,9 +453,10 @@ su-mcp/
     ├── input/
     │   └── creds.json          # Credentials file (user-provided, not in repo)
     └── su-core/
-        ├── index.js            # Core tools initializer
-        ├── su-core-search.js   # search and get-filter-options tools
-        └── su-core-analytics.js# analytics tool
+        ├── index.js                  # Core tools initializer
+        ├── su-core-search.js         # search and get-filter-options tools
+        ├── su-core-analytics.js      # analytics tool
+        └── su-core-search-clients.js # get-search-clients tool
 ```
 
 ---
