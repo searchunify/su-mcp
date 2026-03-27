@@ -257,6 +257,8 @@ Add the following entry to the `mcpServers` section:
 
 Replace `<path_to_creds.json>` with the absolute path to your `creds.json` file.
 
+> **Docker Image Tags:** Use `searchunifyutils/su-mcp` (defaults to `latest`) or pin a specific version with `searchunifyutils/su-mcp:1.1.0`. Available tags are published on [Docker Hub](https://hub.docker.com/r/searchunifyutils/su-mcp).
+
 #### Step 3 -- Restart Claude Desktop
 
 Fully quit (**Cmd+Q** on macOS) and reopen Claude Desktop to apply the updated configuration.
@@ -525,6 +527,27 @@ su-mcp/
 | **Missing API Scopes** | Ensure the client and user have the required search and analytics scopes enabled in your SearchUnify instance. |
 | **Connection Refused (HTTP)** | Verify the server is running with `MCP_TRANSPORT=http` and the port matches. |
 | **mcp-remote not found** | Run `npx mcp-remote` (it will be fetched automatically) or install it globally with `npm install -g mcp-remote`. |
+
+---
+
+## Changelog
+
+### v1.1.0
+- Added `get-search-clients` tool — list all search clients configured in the instance
+- Added `averageClickPosition` report type to analytics tool
+- Added `sessionDetails` report type to analytics tool
+- Added local Node.js integration guide (Integration 2)
+- Updated `su-sdk` dependency to `2.1.0`
+- Improved `formatForClaude` to handle object and nested data responses
+
+### v1.0.0
+- Initial release
+- `search` tool with pagination, sorting, and facet filtering
+- `get-filter-options` tool for discovering available filters
+- `analytics` tool with 5 report types (getAllSearchQuery, searchQueryWithResult, searchQueryWithNoClicks, searchQueryWithoutResults, getAllSearchConversion)
+- Docker and mcp-remote integration support
+- API Key, OAuth 2.0 Password Grant, and Client Credentials authentication
+- Dual transport: stdio and Streamable HTTP
 
 ---
 
