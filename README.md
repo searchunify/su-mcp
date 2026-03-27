@@ -257,6 +257,8 @@ Add the following entry to the `mcpServers` section:
 
 Replace `<path_to_creds.json>` with the absolute path to your `creds.json` file.
 
+> **Docker Image Tags:** Use `searchunifyutils/su-mcp` (defaults to `latest`) or pin a specific version with `searchunifyutils/su-mcp:1.1.0`. Available tags are published on [Docker Hub](https://hub.docker.com/r/searchunifyutils/su-mcp).
+
 #### Step 3 -- Restart Claude Desktop
 
 Fully quit (**Cmd+Q** on macOS) and reopen Claude Desktop to apply the updated configuration.
