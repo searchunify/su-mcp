@@ -18,7 +18,7 @@ By leveraging [su-sdk-js](https://www.npmjs.com/package/su-sdk), this server exp
 
 ## Tools
 
-The MCP server exposes **3 tools** that AI assistants can invoke:
+The MCP server exposes **4 tools** that AI assistants can invoke:
 
 ### 1. `search`
 
@@ -31,6 +31,7 @@ Performs a search query against your SearchUnify instance and returns relevant r
 | `page` | `integer` | No | Page number for pagination (1-100). Defaults to `1`. |
 | `pageSize` | `integer` | No | Number of results per page (1-100). Defaults to `10`. |
 | `sortBy` | `string` | No | Field to sort results by. Allowed values: `_score` (relevance) or `post_time` (date). |
+| `versionResults` | `boolean` | No | Whether to use versioning. Defaults to `false`. |
 
 **Aggregation object schema:**
 
@@ -86,6 +87,23 @@ Retrieves analytics reports from SearchUnify.
 | `searchQueryWithoutResults` | Search queries that returned zero results. |
 | `getAllSearchQuery` | All search queries. |
 | `getAllSearchConversion` | All search conversion data. |
+| `averageClickPosition` | Average click position data per search query. Returns ACP, click count, search count, and session count. |
+| `sessionDetails` | Session activity logs including page views, searches, conversions, and case events. |
+
+---
+
+### 4. `get-search-clients`
+
+Lists all search clients configured in the SearchUnify instance. Returns minimal information for each search client. No parameters required -- the tenant is derived from the authentication credentials.
+
+**Returns:** An array of search clients, each containing:
+
+| Field | Description |
+|-------|-------------|
+| `id` | Search client ID. |
+| `name` | Search client name. |
+| `uid` | Search client unique identifier (UUID). |
+| `search_client_type` | Type of search client (e.g. Web App, Salesforce, etc.). Available on instances running admin v25-nov or later. |
 
 ---
 
@@ -94,8 +112,8 @@ Retrieves analytics reports from SearchUnify.
 - A [SearchUnify](https://www.searchunify.com/) account with:
   - A valid instance URL
   - Authentication credentials (API Key **or** OAuth 2.0 credentials)
-  - A Search Client UID
-  - API scopes enabled for search and analytics operations
+  - A Search Client UID (found in SearchUnify admin panel under Search Clients, or use the `get-search-clients` tool to list all available UIDs)
+  - API scopes enabled (set scope to "All" for full access, or enable specific scopes for search, analytics, and content operations)
 - [Docker](https://www.docker.com/) installed (for Docker-based deployment)
 - An MCP-compatible client (e.g. Claude Desktop, Cursor)
 
@@ -125,14 +143,14 @@ The server supports two transport mechanisms and can run them simultaneously.
 
 | Environment Variable | Values | Default | Description |
 |----------------------|--------|---------|-------------|
-| `MCP_TRANSPORT` | `stdio`, `http`, `both` | `stdio` | Which transport(s) to start. |
+| `MCP_TRANSPORT` | `stdio`, `http`, `both` | `both` | Which transport(s) to start. |
 | `MCP_HTTP_PORT` | number | `3000` | Port for the HTTP transport (when mode is `http` or `both`). |
 
 ### stdio Transport
 
 - Used by local MCP clients such as Claude Desktop.
 - Communicates over stdin/stdout.
-- No additional configuration needed -- this is the default.
+- No additional configuration needed.
 
 ### HTTP Transport (Streamable HTTP)
 
@@ -241,11 +259,55 @@ Replace `<path_to_creds.json>` with the absolute path to your `creds.json` file.
 
 #### Step 3 -- Restart Claude Desktop
 
-Restart Claude to apply the updated configuration.
+Fully quit (**Cmd+Q** on macOS) and reopen Claude Desktop to apply the updated configuration.
 
 ---
 
-### Integration 2: Remote HTTP via `mcp-remote` (Streamable HTTP)
+### Integration 2: Local Node.js (stdio)
+
+Run the MCP server directly with Node.js without Docker. Requires **Node.js 18+** (Node 20+ recommended) and a `creds.json` file.
+
+#### Step 1 -- Clone and install
+
+```bash
+git clone https://github.com/searchunify/su-mcp.git
+cd su-mcp
+npm install
+```
+
+#### Step 2 -- Create credentials file
+
+Create `src/input/creds.json` with your credentials (see Integration 1, Step 1 for format options).
+
+#### Step 3 -- Configure Claude Desktop
+
+```json
+{
+  "mcpServers": {
+    "su-mcp": {
+      "command": "node",
+      "args": [
+        "/absolute/path/to/su-mcp/src/index.js"
+      ],
+      "env": {
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}
+```
+
+Replace `/absolute/path/to/su-mcp` with the actual path where you cloned the repository.
+
+> **Note:** Setting `MCP_TRANSPORT` to `stdio` is recommended for local Claude Desktop usage. If omitted, the default is `both`, which also starts an HTTP server on port 3000.
+
+#### Step 4 -- Restart Claude Desktop
+
+Fully quit (Cmd+Q on macOS) and reopen Claude Desktop to apply the updated configuration.
+
+---
+
+### Integration 3: Remote HTTP via `mcp-remote` (Streamable HTTP)
 
 For connecting to a remotely hosted SearchUnify MCP server over HTTP, use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote). Credentials are passed as HTTP headers on every request -- no local `creds.json` is needed. To run su-mcp via mcp-remote **node version 24** is required on the machine.
 
@@ -260,7 +322,7 @@ Add the following to your Claude Desktop `claude_desktop_config.json`:
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://<your-mcp-host>/su-mcp/",
+        "https://mcp.searchunify.com/mcp",
         "--header",
         "searchunify-instance:<searchunify_instance_url>",
         "--header",
@@ -283,7 +345,7 @@ All header names use the `searchunify-` prefix (lowercase):
 
 | Header | Required | Description |
 |--------|----------|-------------|
-| `searchunify-instance` | Yes | Your SearchUnify instance URL (e.g. `<searchUnify instance url>`). |
+| `searchunify-instance` | Yes | Your SearchUnify instance URL (e.g. `https://your-instance.searchunify.com`). |
 | `searchunify-uid` | Yes | Search Client UID. |
 | `searchunify-auth-type` | Yes | Authentication method: `apiKey`, `password`, or `clientCredentials`. |
 | `searchunify-timeout` | No | Request timeout in milliseconds. Defaults to `60000`. |
@@ -307,17 +369,17 @@ All header names use the `searchunify-` prefix (lowercase):
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://feature4.searchunify.com/su-mcp/",
+        "https://mcp.searchunify.com/mcp",
         "--header",
-        "searchunify-instance:<searchUnify instance url>",
+        "searchunify-instance:https://your-instance.searchunify.com",
         "--header",
         "searchunify-timeout:60000",
         "--header",
         "searchunify-auth-type:apiKey",
         "--header",
-        "searchunify-api-key:45dc9f1871909fb88df76ba04077278e",
+        "searchunify-api-key:<your_api_key>",
         "--header",
-        "searchunify-uid:5fb13af5-0034-11f1-b6ce-26d6deef0cad"
+        "searchunify-uid:<search_client_uid>"
       ]
     }
   }
@@ -333,9 +395,9 @@ All header names use the `searchunify-` prefix (lowercase):
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://<your-mcp-host>/su-mcp/",
+        "https://mcp.searchunify.com/mcp",
         "--header",
-        "searchunify-instance:<searchUnify instance url>",
+        "searchunify-instance:https://your-instance.searchunify.com",
         "--header",
         "searchunify-timeout:60000",
         "--header",
@@ -365,9 +427,9 @@ All header names use the `searchunify-` prefix (lowercase):
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://<your-mcp-host>/su-mcp/",
+        "https://mcp.searchunify.com/mcp",
         "--header",
-        "searchunify-instance:<searchUnify instance url>",
+        "searchunify-instance:https://your-instance.searchunify.com",
         "--header",
         "searchunify-timeout:60000",
         "--header",
@@ -418,14 +480,24 @@ MCP_HTTP_URL=http://localhost:4000 node scripts/test-mcp-client.js http
 
 The test client connects, lists all available tools, pings the server, and optionally calls the `search` and `get-filter-options` tools with sample queries.
 
+**Unit tests** (no credentials needed):
+
+```bash
+npm test
+```
+
+Runs validation and module import tests for all tools.
+
 ---
 
 ## Project Structure
 
 ```
 su-mcp/
-├── Dockerfile                  # Docker image definition (Node 24 Alpine)
-├── package.json                # Dependencies and scripts
+├── Dockerfile                  # Docker image definition (Node 24 Alpine, default transport: both)
+├── package.json                # Dependencies and scripts (su-sdk ^2.1.0)
+├── test/
+│   └── test-new-tools.js       # Unit tests for new tools
 ├── scripts/
 │   └── test-mcp-client.js      # Test client for stdio and HTTP
 └── src/
@@ -436,9 +508,10 @@ su-mcp/
     ├── input/
     │   └── creds.json          # Credentials file (user-provided, not in repo)
     └── su-core/
-        ├── index.js            # Core tools initializer
-        ├── su-core-search.js   # search and get-filter-options tools
-        └── su-core-analytics.js# analytics tool
+        ├── index.js                  # Core tools initializer
+        ├── su-core-search.js         # search and get-filter-options tools
+        ├── su-core-analytics.js      # analytics tool
+        └── su-core-search-clients.js # get-search-clients tool
 ```
 
 ---
