@@ -530,6 +530,27 @@ su-mcp/
 
 ---
 
+## Changelog
+
+### v1.1.0
+- Added `get-search-clients` tool — list all search clients configured in the instance
+- Added `averageClickPosition` report type to analytics tool
+- Added `sessionDetails` report type to analytics tool
+- Added local Node.js integration guide (Integration 2)
+- Updated `su-sdk` dependency to `2.1.0`
+- Improved `formatForClaude` to handle object and nested data responses
+
+### v1.0.0
+- Initial release
+- `search` tool with pagination, sorting, and facet filtering
+- `get-filter-options` tool for discovering available filters
+- `analytics` tool with 5 report types (getAllSearchQuery, searchQueryWithResult, searchQueryWithNoClicks, searchQueryWithoutResults, getAllSearchConversion)
+- Docker and mcp-remote integration support
+- API Key, OAuth 2.0 Password Grant, and Client Credentials authentication
+- Dual transport: stdio and Streamable HTTP
+
+---
+
 ## License
 
 This project is licensed under the BSD 2-Clause License.  
