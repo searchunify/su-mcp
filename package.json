@@ -9,7 +9,7 @@
   "description": "Searchunify MCP to use SearchUnify Search",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.10.1",
-    "su-sdk": "file:../su-sdk-js",
+    "su-sdk": "2.1.0",
     "zod": "^3.24.3"
   },
   "devDependencies": {
