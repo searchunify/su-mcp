@@ -1,0 +1,4 @@
+node_modules
+src/input/creds.json
+src/input/*.json
+.git
