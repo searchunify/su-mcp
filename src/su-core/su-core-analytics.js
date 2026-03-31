@@ -18,27 +18,61 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
     startDate: z.string().describe("start date of the report"),
     endDate: z.string().describe("end date of the report"),
     count: z.number().describe("number of records to be fetched"),
-
-  }, async ({ reportType, startDate, endDate, count }) => {
+    pageNumber: z.number().min(1).optional().describe("page number for paginated search classification reports"),
+    sortByField: z.enum(["count"]).optional().describe("field to sort by; currently only count is supported"),
+    sortType: z.enum(["asc", "desc"]).optional().describe("sort order for count; defaults to desc"),
+  }, async ({ reportType, startDate, endDate, count, pageNumber, sortByField, sortType }) => {
     const credsForRequest = c();
     const Analytics = credsForRequest.suRestClient.Analytics();
     let analyticsResponse = {};
     switch(reportType){
       case reportTypes.searchQueryWithNoClicks:
         console.error('searchQueryWithNoClicks triggered');
-        analyticsResponse = await Analytics.searchQueryWithNoClicks({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
+        analyticsResponse = await Analytics.searchQueryWithNoClicks({
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+          count,
+          pageNumber,
+          sortByField,
+          sortType
+        });
         break;
       case reportTypes.searchQueryWithResult:
         console.error('searchQueryWithResult triggered');
-        analyticsResponse = await Analytics.searchQueryWithResult({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
+        analyticsResponse = await Analytics.searchQueryWithResult({
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+          count,
+          pageNumber,
+          sortByField,
+          sortType
+        });
         break;
       case reportTypes.searchQueryWithoutResults:
         console.error('searchQueryWithoutResults triggered');
-        analyticsResponse = await Analytics.searchQueryWithoutResults({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
+        analyticsResponse = await Analytics.searchQueryWithoutResults({
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+          count,
+          pageNumber,
+          sortByField,
+          sortType
+        });
         break;
       case reportTypes.getAllSearchQuery:
         console.error('getAllSearchQuery triggered');
-        analyticsResponse = await Analytics.getAllSearchQuery({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
+        analyticsResponse = await Analytics.getAllSearchQuery({
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+          count,
+          pageNumber,
+          sortByField,
+          sortType
+        });
         break;
       case reportTypes.getAllSearchConversion:
         console.error('getAllSearchConversion triggered');
