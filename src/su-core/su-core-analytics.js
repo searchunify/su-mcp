@@ -17,11 +17,12 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
     reportType: z.enum(Object.values(reportTypes)).describe("type of analytics report to fetch data from"),
     startDate: z.string().describe("start date of the report"),
     endDate: z.string().describe("end date of the report"),
-    count: z.number().describe("number of records to be fetched"),
+    count: z.number().min(1).max(500).describe("number of records to be fetched (1-500)"),
+    sessionId: z.string().optional().describe("optional session id filter for sessionDetails report"),
     pageNumber: z.number().min(1).optional().describe("page number for paginated search classification reports"),
     sortByField: z.enum(["count"]).optional().describe("field to sort by; currently only count is supported"),
     sortType: z.enum(["asc", "desc"]).optional().describe("sort order for count; defaults to desc"),
-  }, async ({ reportType, startDate, endDate, count, pageNumber, sortByField, sortType }) => {
+  }, async ({ reportType, startDate, endDate, count, sessionId, pageNumber, sortByField, sortType }) => {
     const credsForRequest = c();
     const Analytics = credsForRequest.suRestClient.Analytics();
     let analyticsResponse = {};
@@ -84,7 +85,13 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         break;
       case reportTypes.sessionDetails:
         console.error('sessionDetails triggered');
-        analyticsResponse = await Analytics.getSessionDetails({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
+        analyticsResponse = await Analytics.getSessionDetails({
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+          count,
+          sessionId
+        });
         break;
       default:
         console.error('invalid reportType ', reportType);

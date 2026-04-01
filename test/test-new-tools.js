@@ -49,7 +49,8 @@ describe('Analytics tool - schema', () => {
     reportType: z.string(),
     startDate: z.string(),
     endDate: z.string(),
-    count: z.number(),
+    count: z.number().min(1).max(500),
+    sessionId: z.string().optional(),
   });
 
   it('should accept valid request', () => {
@@ -60,6 +61,26 @@ describe('Analytics tool - schema', () => {
       count: 10,
     });
     assert.equal(result.count, 10);
+  });
+
+  it('should accept sessionId for sessionDetails', () => {
+    const result = analyticsSchema.parse({
+      reportType: 'sessionDetails',
+      startDate: '2025-01-01',
+      endDate: '2025-01-31',
+      count: 50,
+      sessionId: '1649742483444046',
+    });
+    assert.equal(result.sessionId, '1649742483444046');
+  });
+
+  it('should reject count greater than 500', () => {
+    assert.throws(() => analyticsSchema.parse({
+      reportType: 'sessionDetails',
+      startDate: '2025-01-01',
+      endDate: '2025-01-31',
+      count: 501,
+    }));
   });
 });
 
