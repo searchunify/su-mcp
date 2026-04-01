@@ -11,6 +11,28 @@ const reportTypes = {
   sessionDetails: "sessionDetails"
 };
 
+const PAGE_LIMITED_REPORT_TYPES = new Set([
+  reportTypes.searchQueryWithNoClicks,
+  reportTypes.searchQueryWithResult,
+  reportTypes.searchQueryWithoutResults,
+  reportTypes.getAllSearchQuery,
+]);
+
+const TEN_LIMIT_REPORT_TYPES = new Set([
+  ...PAGE_LIMITED_REPORT_TYPES,
+  reportTypes.sessionDetails
+]);
+
+const enforceMcpAnalyticsLimits = ({ reportType, count, pageNumber }) => {
+  if (TEN_LIMIT_REPORT_TYPES.has(reportType) && count > 10) {
+    throw new Error(`Validation failed - count should be between 1-10 for reportType ${reportType}`);
+  }
+
+  if (PAGE_LIMITED_REPORT_TYPES.has(reportType) && pageNumber !== undefined && pageNumber > 10) {
+    throw new Error(`Validation failed - pageNumber should be between 1-10 for reportType ${reportType}`);
+  }
+};
+
 const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
   const c = () => (getCreds ? getCreds() : creds);
   server.tool("analytics", "get analytics reports data from searchunify", {
@@ -26,6 +48,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
     const credsForRequest = c();
     const Analytics = credsForRequest.suRestClient.Analytics();
     let analyticsResponse = {};
+    enforceMcpAnalyticsLimits({ reportType, count, pageNumber });
     switch(reportType){
       case reportTypes.searchQueryWithNoClicks:
         console.error('searchQueryWithNoClicks triggered');
