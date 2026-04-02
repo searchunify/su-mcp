@@ -16,6 +16,10 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     sortBy: z.enum(["_score", "post_time"]).optional().describe("field to sort results by, e.g. _score or post_time"),
     versionResults: z.boolean().default(false).optional().describe("This field speicifies whether to use versioning or not. Default value is true."),
     // sortOrder: z.enum(["asc", "desc"]).optional().describe("sort order for results, asc or desc"),
+  }, {
+    readOnlyHint: true,
+    destructiveHint: false,
+    openWorldHint: true,
   }, async ({ searchString, aggregations, page, pageSize, sortBy, versionResults }) => {
     const c = credsForRequest();
     const Search = c.suRestClient.Search();
@@ -87,6 +91,11 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     {
       searchString: z.string().min(3).max(100).describe("search query, a single word or sentence"),
       aggregations: z.array(aggregationSchema).optional().describe("optional list of current filters to get filter options in context of filtered results"),
+    },
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: true,
     },
     async ({ searchString, aggregations }) => {
       const c = credsForRequest();

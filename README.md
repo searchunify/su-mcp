@@ -450,6 +450,61 @@ All header names use the `searchunify-` prefix (lowercase):
 
 ---
 
+### Integration 4: Claude Public Directory (OAuth)
+
+When installed from Claude's public directory, authentication is handled via OAuth 2.0 — no local credentials file or HTTP headers needed.
+
+**How it works:**
+1. Click "Connect SearchUnify" in Claude's integrations directory
+2. A configuration form appears where you enter:
+   - Your SearchUnify instance URL
+   - Authentication type (API Key or Client Credentials)
+   - Your API Key or Client ID/Secret
+   - Search Client UID
+3. Credentials are validated against your SearchUnify instance
+4. Once connected, all tools are available immediately
+
+**For server operators** — to enable OAuth on your deployment, set these environment variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `REDIS_URL` | Yes | Redis connection URL (e.g., `redis://localhost:6379`) |
+| `OAUTH_ENCRYPTION_KEY` | Yes | 64-character hex string for AES-256 encryption of stored credentials |
+| `MCP_ISSUER_URL` | Yes | Public HTTPS URL of your MCP server (e.g., `https://mcp.searchunify.com`) |
+
+Generate an encryption key:
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+---
+
+## Usage Examples
+
+Here are some example prompts you can use with Claude after connecting SearchUnify:
+
+**Search for content:**
+> "Search for 'how to configure SSO' in SearchUnify"
+
+Claude will use the `search` tool to query your SearchUnify instance and return relevant results with titles, summaries, and links.
+
+**Explore filters before searching:**
+> "What filter options are available for the query 'API documentation'?"
+
+Claude will use `get-filter-options` to discover available facets (e.g., by source, category, content type), then you can refine your search.
+
+**Get analytics reports:**
+> "Show me the top 10 search queries with no clicks from the last 30 days"
+
+Claude will use the `analytics` tool with `reportType: searchQueryWithNoClicks` to retrieve queries that returned results but received no user clicks.
+
+**List search clients:**
+> "List all search clients configured in my SearchUnify instance"
+
+Claude will use `get-search-clients` to show all available search clients with their names and UIDs.
+
+---
+
 ## Testing the MCP Server
 
 A test client script is provided at `scripts/test-mcp-client.js` to verify the server works correctly.
@@ -497,18 +552,22 @@ Runs validation and module import tests for all tools.
 ```
 su-mcp/
 ├── Dockerfile                  # Docker image definition (Node 24 Alpine, default transport: both)
-├── package.json                # Dependencies and scripts (su-sdk ^2.1.0)
+├── package.json                # Dependencies and scripts
 ├── test/
-│   └── test-new-tools.js       # Unit tests for new tools
+│   └── test-new-tools.js       # Unit tests for tools
 ├── scripts/
 │   └── test-mcp-client.js      # Test client for stdio and HTTP
 └── src/
-    ├── index.js                # Entry point -- transport setup (stdio/HTTP)
+    ├── index.js                # Entry point -- transport setup (stdio/HTTP/OAuth)
     ├── tools.js                # Tool initialization orchestrator
     ├── utils.js                # Response formatting utilities
-    ├── validations.js          # Credential validation and header parsing
+    ├── validations.js          # Credential validation, header parsing, OAuth token extraction
     ├── input/
     │   └── creds.json          # Credentials file (user-provided, not in repo)
+    ├── auth/
+    │   ├── oauth-provider.js   # MCP OAuth server provider (PKCE, auth code, tokens)
+    │   ├── redis-store.js      # Redis-backed encrypted credential and token storage
+    │   └── config-form.js      # HTML configuration form for OAuth authorize step
     └── su-core/
         ├── index.js                  # Core tools initializer
         ├── su-core-search.js         # search and get-filter-options tools
@@ -532,6 +591,17 @@ su-mcp/
 
 ## Changelog
 
+### v1.2.0
+- Added OAuth 2.0 with PKCE support for Claude public directory listing
+- Added tool safety annotations (readOnlyHint, destructiveHint, openWorldHint) to all tools
+- Added Redis-backed encrypted credential storage for OAuth flow
+- Added configuration form for OAuth authorization step
+- Upgraded `@modelcontextprotocol/sdk` to `1.28.0`
+- Added `express` and `ioredis` dependencies
+- Added privacy policy and support information
+- Added usage examples to documentation
+- OAuth is optional — existing stdio and HTTP header auth continue to work unchanged
+
 ### v1.1.0
 - Added `get-search-clients` tool — list all search clients configured in the instance
 - Added `averageClickPosition` report type to analytics tool
@@ -551,9 +621,19 @@ su-mcp/
 
 ---
 
+## Privacy Policy
+
+This project is subject to the [SearchUnify Privacy Policy](https://www.searchunify.com/privacy-policy/).
+
+## Support
+
+- **Issues:** [GitHub Issues](https://github.com/searchunify/su-mcp/issues)
+- **Documentation:** [SearchUnify Docs](https://docs.searchunify.com/)
+- **Website:** [searchunify.com](https://www.searchunify.com/)
+
 ## License
 
-This project is licensed under the BSD 2-Clause License.  
+This project is licensed under the BSD 2-Clause License.
 See the [LICENSE](LICENSE) file for details.
 
 For more information, visit [SearchUnify](https://www.searchunify.com/) or check out the [su-sdk-js](https://www.npmjs.com/package/su-sdk) documentation.

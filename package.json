@@ -2,13 +2,26 @@
   "name": "searchunify-mcp",
   "version": "1.1.0",
   "main": "src/index.js",
-  "keywords": [],
+  "keywords": ["mcp", "mcp-server", "claude", "searchunify", "search", "enterprise-search"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/searchunify/su-mcp.git"
+  },
+  "homepage": "https://mcp.searchunify.com",
+  "bugs": {
+    "url": "https://github.com/searchunify/su-mcp/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "type": "module",
   "author": "Ashish Prasher <ashish.prasher@grazitti.com>",
   "license": "ISC",
   "description": "Searchunify MCP to use SearchUnify Search",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.10.1",
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "express": "^5.2.1",
+    "ioredis": "^5.10.1",
     "su-sdk": "2.1.0",
     "zod": "^3.24.3"
   },
@@ -19,6 +32,8 @@
   "scripts": {
     "test": "node --test 'test/**/*.js'",
     "test:stdio": "node scripts/test-mcp-client.js stdio",
-    "test:http": "node scripts/test-mcp-client.js http"
+    "test:http": "node scripts/test-mcp-client.js http",
+    "test:oauth": "node scripts/test-oauth-flow.js auto",
+    "test:oauth:visual": "node scripts/test-oauth-flow.js visual"
   }
 }

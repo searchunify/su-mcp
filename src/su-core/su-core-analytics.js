@@ -19,6 +19,10 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
     endDate: z.string().describe("end date of the report"),
     count: z.number().describe("number of records to be fetched"),
 
+  }, {
+    readOnlyHint: true,
+    destructiveHint: false,
+    openWorldHint: true,
   }, async ({ reportType, startDate, endDate, count }) => {
     const credsForRequest = c();
     const Analytics = credsForRequest.suRestClient.Analytics();
