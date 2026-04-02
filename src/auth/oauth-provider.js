@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import http from "node:http";
 import https from "node:https";
-import { RedisStore, ACCESS_TOKEN_TTL, REFRESH_TOKEN_TTL } from "./redis-store.js";
+import { createStore, ACCESS_TOKEN_TTL, REFRESH_TOKEN_TTL } from "./store.js";
 import { getInstanceFormHTML } from "./config-form.js";
 
 function generateToken() {
@@ -43,7 +43,7 @@ class ClientsStore {
  */
 class SUMcpOAuthProvider {
   constructor(redisUrl) {
-    this.store = new RedisStore(redisUrl);
+    this.store = createStore(redisUrl);
     this._clientsStore = new ClientsStore(this.store);
     const baseUrl = process.env.MCP_ISSUER_URL?.replace(/\/$/, "")
       || `http://localhost:${process.env.MCP_HTTP_PORT || 3000}`;
@@ -52,6 +52,16 @@ class SUMcpOAuthProvider {
 
   get clientsStore() {
     return this._clientsStore;
+  }
+
+  /** Connect to Redis. Returns true if successful, false otherwise. */
+  async connect() {
+    return this.store.connect();
+  }
+
+  /** Check if Redis is ready. */
+  isReady() {
+    return this.store.isReady();
   }
 
   /**

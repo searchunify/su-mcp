@@ -27,7 +27,8 @@ function getHttpPort() {
 }
 
 function isOAuthEnabled() {
-  return !!(process.env.REDIS_URL && process.env.OAUTH_ENCRYPTION_KEY);
+  // OAuth requires OAUTH_ENCRYPTION_KEY. Redis is optional (falls back to in-memory).
+  return !!process.env.OAUTH_ENCRYPTION_KEY;
 }
 
 function createMcpServer() {
@@ -62,14 +63,22 @@ async function runHttp(creds, port) {
   });
   await server.connect(transport);
 
-  const oauthEnabled = isOAuthEnabled();
+  let oauthEnabled = isOAuthEnabled();
   let oauthProvider;
 
   if (oauthEnabled) {
     oauthProvider = new SUMcpOAuthProvider(process.env.REDIS_URL);
-    console.error("[OAuth] OAuth enabled — proxy flow via SU login");
+    const storeConnected = await oauthProvider.connect();
+    if (storeConnected) {
+      console.error("[OAuth] OAuth enabled — proxy flow via SU login");
+    } else {
+      console.error("[OAuth] WARNING: Store not reachable — OAuth disabled, server will run without OAuth");
+      try { await oauthProvider.store.disconnect(); } catch {}
+      oauthEnabled = false;
+      oauthProvider = null;
+    }
   } else {
-    console.error("[OAuth] OAuth disabled — set REDIS_URL and OAUTH_ENCRYPTION_KEY to enable");
+    console.error("[OAuth] OAuth disabled — set OAUTH_ENCRYPTION_KEY to enable (REDIS_URL optional)");
   }
 
   const app = express();
@@ -108,8 +117,17 @@ async function runHttp(creds, port) {
       message: { error: "Too many requests, please try again later" },
     });
 
+    // Guard: reject OAuth requests if store is unavailable
+    const requireStore = (req, res, next) => {
+      if (!oauthProvider.isReady()) {
+        console.error("[OAuth] Store unavailable — rejecting request");
+        return res.status(503).json({ error: "Service temporarily unavailable. Please try again later." });
+      }
+      next();
+    };
+
     // Instance form submission (POST — secrets in body, never in URL/logs)
-    app.post("/authorize/start", authRateLimit, express.urlencoded({ extended: false }), async (req, res) => {
+    app.post("/authorize/start", requireStore, authRateLimit, express.urlencoded({ extended: false }), async (req, res) => {
       try {
         const { session, instance, su_client_id, su_client_secret } = req.body;
         if (!session || !instance || !su_client_id || !su_client_secret) {
@@ -154,7 +172,7 @@ async function runHttp(creds, port) {
     });
 
     // Callback from SU's /authorise_redirect — SU sends us back with ?code=xxx&state=sessionId
-    app.get("/su-callback", authRateLimit, async (req, res) => {
+    app.get("/su-callback", requireStore, authRateLimit, async (req, res) => {
       try {
         const { code, state } = req.query;
         if (!code || !state) {
