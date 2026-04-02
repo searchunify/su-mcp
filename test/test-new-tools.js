@@ -51,6 +51,8 @@ describe('Analytics tool - schema', () => {
     endDate: z.string(),
     count: z.number().min(1).max(500),
     sessionId: z.string().optional(),
+    pageNumber: z.number().min(1).max(10).optional(),
+    startIndex: z.number().min(1).max(10).optional(),
   });
 
   it('should accept valid request', () => {
@@ -80,6 +82,26 @@ describe('Analytics tool - schema', () => {
       startDate: '2025-01-01',
       endDate: '2025-01-31',
       count: 501,
+    }));
+  });
+
+  it('should reject pageNumber greater than 10', () => {
+    assert.throws(() => analyticsSchema.parse({
+      reportType: 'getAllSearchQuery',
+      startDate: '2025-01-01',
+      endDate: '2025-01-31',
+      count: 100,
+      pageNumber: 11,
+    }));
+  });
+
+  it('should reject startIndex greater than 10 for session log', () => {
+    assert.throws(() => analyticsSchema.parse({
+      reportType: 'sessionDetails',
+      startDate: '2025-01-01',
+      endDate: '2025-01-31',
+      count: 100,
+      startIndex: 11,
     }));
   });
 });

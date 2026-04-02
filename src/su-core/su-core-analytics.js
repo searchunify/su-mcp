@@ -11,28 +11,6 @@ const reportTypes = {
   sessionDetails: "sessionDetails"
 };
 
-const PAGE_LIMITED_REPORT_TYPES = new Set([
-  reportTypes.searchQueryWithNoClicks,
-  reportTypes.searchQueryWithResult,
-  reportTypes.searchQueryWithoutResults,
-  reportTypes.getAllSearchQuery,
-]);
-
-const TEN_LIMIT_REPORT_TYPES = new Set([
-  ...PAGE_LIMITED_REPORT_TYPES,
-  reportTypes.sessionDetails
-]);
-
-const enforceMcpAnalyticsLimits = ({ reportType, count, pageNumber }) => {
-  if (TEN_LIMIT_REPORT_TYPES.has(reportType) && count > 10) {
-    throw new Error(`Validation failed - count should be between 1-10 for reportType ${reportType}`);
-  }
-
-  if (PAGE_LIMITED_REPORT_TYPES.has(reportType) && pageNumber !== undefined && pageNumber > 10) {
-    throw new Error(`Validation failed - pageNumber should be between 1-10 for reportType ${reportType}`);
-  }
-};
-
 const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
   const c = () => (getCreds ? getCreds() : creds);
   server.tool("analytics", "get analytics reports data from searchunify", {
@@ -41,14 +19,14 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
     endDate: z.string().describe("end date of the report"),
     count: z.number().min(1).max(500).describe("number of records to be fetched (1-500)"),
     sessionId: z.string().optional().describe("optional session id filter for sessionDetails report"),
-    pageNumber: z.number().min(1).optional().describe("page number for paginated search classification reports"),
+    pageNumber: z.number().min(1).max(10).optional().describe("page number for the 4 search classification reports (max 10 in MCP)"),
+    startIndex: z.number().min(1).max(10).optional().describe("pagination page for sessionDetails / session log all (max 10 in MCP); maps to API startIndex"),
     sortByField: z.enum(["count"]).optional().describe("field to sort by; currently only count is supported"),
     sortType: z.enum(["asc", "desc"]).optional().describe("sort order for count; defaults to desc"),
-  }, async ({ reportType, startDate, endDate, count, sessionId, pageNumber, sortByField, sortType }) => {
+  }, async ({ reportType, startDate, endDate, count, sessionId, pageNumber, startIndex, sortByField, sortType }) => {
     const credsForRequest = c();
     const Analytics = credsForRequest.suRestClient.Analytics();
     let analyticsResponse = {};
-    enforceMcpAnalyticsLimits({ reportType, count, pageNumber });
     switch(reportType){
       case reportTypes.searchQueryWithNoClicks:
         console.error('searchQueryWithNoClicks triggered');
@@ -113,7 +91,8 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           startDate,
           endDate,
           count,
-          sessionId
+          sessionId,
+          startIndex
         });
         break;
       default:
