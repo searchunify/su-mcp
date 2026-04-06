@@ -21,8 +21,13 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
     sessionId: z.string().optional().describe("optional session id filter for sessionDetails report"),
     pageNumber: z.number().min(1).max(10).optional().describe("page number for the 4 search classification reports (max 10 in MCP)"),
     startIndex: z.number().min(1).max(10).optional().describe("pagination page for sessionDetails / session log all (max 10 in MCP); maps to API startIndex"),
-    sortByField: z.enum(["count"]).optional().describe("field to sort by; currently only count is supported"),
-    sortType: z.enum(["asc", "desc"]).optional().describe("sort order for count; defaults to desc"),
+    sortByField: z
+      .enum(["count", "click", "search", "case", "support", "end_date", "start_date"])
+      .optional()
+      .describe(
+        "Sort field: for search-classification reports use count (query frequency). For sessionDetails the API expects click (conversions), search, case, support, end_date, or start_date — if you pass count here it is sent as click."
+      ),
+    sortType: z.enum(["asc", "desc"]).optional().describe("sort direction; defaults to desc where applicable"),
   }, async ({ reportType, startDate, endDate, count, sessionId, pageNumber, startIndex, sortByField, sortType }) => {
     const credsForRequest = c();
     const Analytics = credsForRequest.suRestClient.Analytics();
@@ -84,17 +89,26 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         console.error('averageClickPosition triggered');
         analyticsResponse = await Analytics.getAverageClickPosition({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
         break;
-      case reportTypes.sessionDetails:
+      case reportTypes.sessionDetails: {
         console.error('sessionDetails triggered');
-        analyticsResponse = await Analytics.getSessionDetails({
+        const sessionParams = {
           searchClientId: credsForRequest.config.uid,
           startDate,
           endDate,
           count,
           sessionId,
-          startIndex
-        });
+          startIndex,
+        };
+        if (sortByField !== undefined) {
+          sessionParams.sortByField =
+            sortByField === "count" ? "click" : sortByField;
+        }
+        if (sortType !== undefined) {
+          sessionParams.sortType = sortType;
+        }
+        analyticsResponse = await Analytics.getSessionDetails(sessionParams);
         break;
+      }
       default:
         console.error('invalid reportType ', reportType);
     }
