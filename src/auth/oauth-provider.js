@@ -45,9 +45,9 @@ class SUMcpOAuthProvider {
   constructor(redisUrl) {
     this.store = createStore(redisUrl);
     this._clientsStore = new ClientsStore(this.store);
-    const baseUrl = process.env.MCP_ISSUER_URL?.replace(/\/$/, "")
+    const issuerUrl = process.env.MCP_ISSUER_URL?.replace(/\/$/, "")
       || `http://localhost:${process.env.MCP_HTTP_PORT || 3000}`;
-    this.mcpCallbackUrl = `${baseUrl}/su-callback`;
+    this.mcpCallbackUrl = `${issuerUrl}/su-callback`;
   }
 
   get clientsStore() {
@@ -80,8 +80,9 @@ class SUMcpOAuthProvider {
       scopes: params.scopes || [],
     });
 
+    const basePath = new URL(this.mcpCallbackUrl).pathname.replace(/\/su-callback$/, "");
     const formHTML = getInstanceFormHTML({
-      formAction: "/authorize/start",
+      formAction: `${basePath}/authorize/start`,
       sessionId,
     });
     res.status(200).type("html").send(formHTML);

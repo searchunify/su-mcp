@@ -87,6 +87,9 @@ async function runHttp(creds, port) {
 
   if (oauthEnabled && oauthProvider) {
     const issuerUrl = new URL(process.env.MCP_ISSUER_URL || `http://localhost:${port}`);
+    // Derive base path from issuer URL (e.g., "/7777" from "https://host/7777")
+    // so OAuth endpoints are mounted at the correct path behind a reverse proxy.
+    const basePath = issuerUrl.pathname.replace(/\/$/, "") || "";
 
     // Security headers for all responses (must be before auth router)
     app.use((req, res, next) => {
@@ -102,7 +105,8 @@ async function runHttp(creds, port) {
     });
 
     // Mount the SDK's OAuth auth router (handles /authorize, /token, /register, /.well-known/*)
-    app.use(mcpAuthRouter({
+    // Uses basePath so endpoints are accessible behind a reverse proxy (e.g., /7777/authorize)
+    app.use(basePath, mcpAuthRouter({
       provider: oauthProvider,
       issuerUrl,
       serviceDocumentationUrl: new URL("https://github.com/searchunify/su-mcp#readme"),
@@ -127,7 +131,7 @@ async function runHttp(creds, port) {
     };
 
     // Instance form submission (POST — secrets in body, never in URL/logs)
-    app.post("/authorize/start", requireStore, authRateLimit, express.urlencoded({ extended: false }), async (req, res) => {
+    app.post(`${basePath}/authorize/start`, requireStore, authRateLimit, express.urlencoded({ extended: false }), async (req, res) => {
       try {
         const { session, instance, su_client_id, su_client_secret } = req.body;
         if (!session || !instance || !su_client_id || !su_client_secret) {
@@ -172,7 +176,7 @@ async function runHttp(creds, port) {
     });
 
     // Callback from SU's /authorise_redirect — SU sends us back with ?code=xxx&state=sessionId
-    app.get("/su-callback", requireStore, authRateLimit, async (req, res) => {
+    app.get(`${basePath}/su-callback`, requireStore, authRateLimit, async (req, res) => {
       try {
         const { code, state } = req.query;
         if (!code || !state) {
@@ -194,9 +198,9 @@ async function runHttp(creds, port) {
     // MCP endpoint with bearer auth — OAuth-authenticated requests
     const bearerAuth = requireBearerAuth({ verifier: oauthProvider });
 
-    app.all("/mcp", bearerAuth, async (req, res) => {
+    app.all(`${basePath}/mcp`, bearerAuth, async (req, res) => {
       const ts = new Date().toISOString();
-      console.error(`[MCP HTTP] ${ts} ${req.method} /mcp (OAuth)`);
+      console.error(`[MCP HTTP] ${ts} ${req.method} ${basePath}/mcp (OAuth)`);
 
       // Extract SU tokens from the bearer token and build credentials
       const token = req.headers.authorization?.split(" ")[1];
