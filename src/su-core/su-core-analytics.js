@@ -8,7 +8,8 @@ const reportTypes = {
   getAllSearchQuery: "getAllSearchQuery",
   getAllSearchConversion: "getAllSearchConversion",
   averageClickPosition: "averageClickPosition",
-  sessionDetails: "sessionDetails"
+  sessionDetails: "sessionDetails",
+  sessionListTable: "sessionListTable"
 };
 
 const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
@@ -18,14 +19,14 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
     startDate: z.string().describe("start date of the report"),
     endDate: z.string().describe("end date of the report"),
     count: z.number().min(1).max(500).describe("number of records to be fetched (1-500)"),
-    sessionId: z.string().optional().describe("optional session id filter for sessionDetails report"),
+    sessionId: z.string().optional().describe("optional session cookie filter for sessionDetails (GET /api/v2/session/log/all) and sessionListTable (GET /api/v2/session/list/table)"),
     pageNumber: z.number().min(1).max(10).optional().describe("page number for the 4 search classification reports (max 10 in MCP)"),
-    startIndex: z.number().min(1).max(10).optional().describe("pagination page for sessionDetails / session log all (max 10 in MCP); maps to API startIndex"),
+    startIndex: z.number().min(1).max(10).optional().describe("pagination page for sessionDetails and sessionListTable (same as session log / list table APIs); max 10 in MCP; maps to API startIndex"),
     sortByField: z
-      .enum(["count", "click", "search", "case", "support", "end_date", "start_date"])
+      .enum(["count", "click", "search", "case", "page_view", "support", "end_date", "start_date"])
       .optional()
       .describe(
-        "Sort field: for search-classification reports use count (query frequency). For sessionDetails the API expects click (conversions), search, case, support, end_date, or start_date — if you pass count here it is sent as click."
+        "Sort field: for search-classification reports use count (query frequency). For sessionListTable use click, search, case, page_view, support, end_date, or start_date. For sessionDetails (session log) use the same except page_view when not applicable — if you pass count here it is sent as click for classification reports only."
       ),
     sortType: z.enum(["asc", "desc"]).optional().describe("sort direction; defaults to desc where applicable"),
   }, async ({ reportType, startDate, endDate, count, sessionId, pageNumber, startIndex, sortByField, sortType }) => {
@@ -107,6 +108,26 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           sessionParams.sortType = sortType;
         }
         analyticsResponse = await Analytics.getSessionDetails(sessionParams);
+        break;
+      }
+      case reportTypes.sessionListTable: {
+        console.error('sessionListTable triggered');
+        const sessionParams = {
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+          count,
+          sessionId,
+          startIndex,
+        };
+        if (sortByField !== undefined) {
+          sessionParams.sortByField =
+            sortByField === "count" ? "click" : sortByField;
+        }
+        if (sortType !== undefined) {
+          sessionParams.sortType = sortType;
+        }
+        analyticsResponse = await Analytics.getSessionListTable(sessionParams);
         break;
       }
       default:

@@ -13,7 +13,8 @@ describe('Analytics tool - reportTypes', () => {
     getAllSearchQuery: "getAllSearchQuery",
     getAllSearchConversion: "getAllSearchConversion",
     averageClickPosition: "averageClickPosition",
-    sessionDetails: "sessionDetails"
+    sessionDetails: "sessionDetails",
+    sessionListTable: "sessionListTable"
   };
 
   it('should include averageClickPosition report type', () => {
@@ -26,14 +27,20 @@ describe('Analytics tool - reportTypes', () => {
     assert.equal(reportTypes.sessionDetails, 'sessionDetails');
   });
 
-  it('should have 7 report types total', () => {
-    assert.equal(Object.keys(reportTypes).length, 7);
+  it('should include sessionListTable report type', () => {
+    assert.ok(reportTypes.sessionListTable);
+    assert.equal(reportTypes.sessionListTable, 'sessionListTable');
+  });
+
+  it('should have 8 report types total', () => {
+    assert.equal(Object.keys(reportTypes).length, 8);
   });
 
   it('zod enum should accept new report types', () => {
     const schema = z.enum(Object.values(reportTypes));
     assert.equal(schema.parse('averageClickPosition'), 'averageClickPosition');
     assert.equal(schema.parse('sessionDetails'), 'sessionDetails');
+    assert.equal(schema.parse('sessionListTable'), 'sessionListTable');
   });
 
   it('zod enum should reject invalid report types', () => {
@@ -76,6 +83,17 @@ describe('Analytics tool - schema', () => {
     assert.equal(result.sessionId, '1649742483444046');
   });
 
+  it('should accept sessionListTable report type with sessionId', () => {
+    const result = analyticsSchema.parse({
+      reportType: 'sessionListTable',
+      startDate: '2025-01-01',
+      endDate: '2025-01-31',
+      count: 50,
+      sessionId: '1649742483444046',
+    });
+    assert.equal(result.reportType, 'sessionListTable');
+  });
+
   it('should reject count greater than 500', () => {
     assert.throws(() => analyticsSchema.parse({
       reportType: 'sessionDetails',
@@ -103,6 +121,11 @@ describe('Analytics tool - schema', () => {
       count: 100,
       startIndex: 11,
     }));
+  });
+
+  it('should accept sortByField page_view for session list table', () => {
+    const sortEnum = z.enum(['count', 'click', 'search', 'case', 'page_view', 'support', 'end_date', 'start_date']);
+    assert.equal(sortEnum.parse('page_view'), 'page_view');
   });
 });
 

@@ -42,6 +42,7 @@ const validateCreds = () => {
   }
   const restClientConfig = { ...config };
   delete restClientConfig.uid;
+  // instance: platform base URL (e.g. https://host); su-sdk appends /api/v2/... from ANALYTICS.* — duplicate /api/v2 on instance is normalized away in SearchUnifyRestClient
   const suRestClient = new SearchUnifyRestClient(restClientConfig);
   console.error ('created sdk connection...');
   return {
@@ -96,6 +97,7 @@ function getCredsFromHeaders(headers) {
 
   const restClientConfig = { ...config };
   delete restClientConfig.uid;
+  // instance: platform base URL; su-sdk appends /api/v2/... (SearchUnifyRestClient strips duplicate trailing /api/v2)
   const suRestClient = new SearchUnifyRestClient(restClientConfig);
   return { suRestClient, config };
 }
