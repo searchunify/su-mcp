@@ -104,6 +104,29 @@ async function runHttp(creds, port) {
       next();
     });
 
+    // Override OAuth metadata to include basePath in endpoint URLs.
+    // The SDK resolves absolute paths like '/authorize' against the issuer origin,
+    // which drops any path prefix. This must be mounted BEFORE the SDK router.
+    if (basePath) {
+      const issuerOrigin = issuerUrl.origin;
+      const metadataOverride = {
+        issuer: issuerUrl.href,
+        service_documentation: "https://github.com/searchunify/su-mcp#readme",
+        authorization_endpoint: `${issuerOrigin}${basePath}/authorize`,
+        response_types_supported: ["code"],
+        code_challenge_methods_supported: ["S256"],
+        token_endpoint: `${issuerOrigin}${basePath}/token`,
+        token_endpoint_auth_methods_supported: ["client_secret_post", "none"],
+        grant_types_supported: ["authorization_code", "refresh_token"],
+        revocation_endpoint: `${issuerOrigin}${basePath}/revoke`,
+        revocation_endpoint_auth_methods_supported: ["client_secret_post"],
+        registration_endpoint: `${issuerOrigin}${basePath}/register`,
+      };
+      app.get(`${basePath}/.well-known/oauth-authorization-server`, (req, res) => {
+        res.status(200).json(metadataOverride);
+      });
+    }
+
     // Mount the SDK's OAuth auth router (handles /authorize, /token, /register, /.well-known/*)
     // Uses basePath so endpoints are accessible behind a reverse proxy (e.g., /7777/authorize)
     app.use(basePath, mcpAuthRouter({
