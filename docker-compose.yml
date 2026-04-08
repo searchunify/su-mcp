@@ -1,0 +1,26 @@
+services:
+  su-mcp:
+    container_name: su-mcp
+    image: ${IMAGE}
+    networks:
+      - shared_network
+    deploy:
+      resources:
+        limits:
+          memory: ${MEMORY}
+    ports:
+      - ${EXPOSED_PORT}:${APP_PORT}
+    environment:
+      MEMORY: ${MEMORY}
+      USE_HTTP: ${USE_HTTP}
+      PORT: ${APP_PORT}
+    command: >
+      sh -c "
+        node src/index.js --http
+      "
+    restart: always
+
+networks:
+  shared_network:
+    name: shared_network
+    external: true
