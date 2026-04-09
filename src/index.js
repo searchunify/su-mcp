@@ -84,7 +84,7 @@ async function runHttp(creds, port) {
   const app = express();
   // Trust reverse proxies (nginx, Cloudflare) so req.ip reflects the real client IP
   // and express-rate-limit works correctly with X-Forwarded-For headers.
-  app.set("trust proxy", true);
+  app.set("trust proxy", 2);
   // Note: do NOT use app.use(express.json()) globally — it consumes the request body
   // before StreamableHTTPServerTransport can read it. Only apply JSON parsing on specific routes.
 
@@ -144,6 +144,7 @@ async function runHttp(creds, port) {
       max: 50,                   // 50 requests per window per IP
       standardHeaders: true,
       legacyHeaders: false,
+      validate: { trustProxy: false, xForwardedForHeader: false },
       message: { error: "Too many requests, please try again later" },
     });
 
