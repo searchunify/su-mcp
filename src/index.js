@@ -82,6 +82,9 @@ async function runHttp(creds, port) {
   }
 
   const app = express();
+  // Trust reverse proxies (nginx, Cloudflare) so req.ip reflects the real client IP
+  // and express-rate-limit works correctly with X-Forwarded-For headers.
+  app.set("trust proxy", true);
   // Note: do NOT use app.use(express.json()) globally — it consumes the request body
   // before StreamableHTTPServerTransport can read it. Only apply JSON parsing on specific routes.
 
