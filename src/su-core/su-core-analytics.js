@@ -9,13 +9,26 @@ const reportTypes = {
   getAllSearchConversion: "getAllSearchConversion",
   averageClickPosition: "averageClickPosition",
   sessionDetails: "sessionDetails",
-  sessionListTable: "sessionListTable"
+  sessionListTable: "sessionListTable",
+  /** POST /api/v2/content/tileDataContent — content-gap counts (failed/no-click/no-result, daily avgs) */
+  tileDataContent: "tileDataContent",
+  /** POST /api/v2/overview/tileDataMetrics1 — visitors, searchUsers, uniqueUsersByDevice, email metrics only */
+  tileDataMetrics1: "tileDataMetrics1",
+  /** POST /api/v2/overview/tileDataMetrics2 — searches, clicks, cases, withResult/withoutResult, uniqueSearches */
+  tileDataMetrics2: "tileDataMetrics2",
 };
 
 const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
   const c = () => (getCreds ? getCreds() : creds);
-  server.tool("analytics", "get analytics reports data from searchunify", {
-    reportType: z.enum(Object.values(reportTypes)).describe("type of analytics report to fetch data from"),
+  server.tool(
+    "analytics",
+    "Analytics reports from SearchUnify. For headline/count questions: tileDataContent = content-gap metrics (failed searches, no-click, no-result, sessions, daily averages). tileDataMetrics1 = visitor/session metrics only (visitors, searchUsers, uniqueUsersByDevice, emptyEmailSessionCount, uniqueUsersByEmail). tileDataMetrics2 = search/click/conversion metrics (searches, withResult, withoutResult, uniqueSearches, clicks, clickedSessions, caseCount). Do not use tileDataMetrics1 for searches, clicks, cases, or with/without result — use tileDataMetrics2.",
+    {
+    reportType: z
+      .enum(Object.values(reportTypes))
+      .describe(
+        "Which report to fetch. Tile APIs: tileDataContent (content gap); tileDataMetrics1 (visitors, search users, unique devices, email session counts); tileDataMetrics2 (search volume, results split, clicks, cases). Classification: searchQueryWith* / getAllSearchQuery. Conversion: getAllSearchConversion, averageClickPosition. Sessions: sessionDetails, sessionListTable."
+      ),
     startDate: z.string().describe("start date of the report"),
     endDate: z.string().describe("end date of the report"),
     count: z.number().min(1).max(500).describe("number of records to be fetched (1-500)"),
@@ -128,6 +141,36 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           sessionParams.sortType = sortType;
         }
         analyticsResponse = await Analytics.getSessionListTable(sessionParams);
+        break;
+      }
+      case reportTypes.tileDataContent: {
+        console.error("tileDataContent triggered");
+        const tileParams = {
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+        };
+        analyticsResponse = await Analytics.getTileDataContent(tileParams);
+        break;
+      }
+      case reportTypes.tileDataMetrics1: {
+        console.error("tileDataMetrics1 triggered");
+        const tileParams = {
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+        };
+        analyticsResponse = await Analytics.getTileDataMetrics1(tileParams);
+        break;
+      }
+      case reportTypes.tileDataMetrics2: {
+        console.error("tileDataMetrics2 triggered");
+        const tileParams = {
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+        };
+        analyticsResponse = await Analytics.getTileDataMetrics2(tileParams);
         break;
       }
       default:

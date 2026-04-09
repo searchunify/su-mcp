@@ -14,7 +14,10 @@ describe('Analytics tool - reportTypes', () => {
     getAllSearchConversion: "getAllSearchConversion",
     averageClickPosition: "averageClickPosition",
     sessionDetails: "sessionDetails",
-    sessionListTable: "sessionListTable"
+    sessionListTable: "sessionListTable",
+    tileDataContent: "tileDataContent",
+    tileDataMetrics1: "tileDataMetrics1",
+    tileDataMetrics2: "tileDataMetrics2",
   };
 
   it('should include averageClickPosition report type', () => {
@@ -32,8 +35,8 @@ describe('Analytics tool - reportTypes', () => {
     assert.equal(reportTypes.sessionListTable, 'sessionListTable');
   });
 
-  it('should have 8 report types total', () => {
-    assert.equal(Object.keys(reportTypes).length, 8);
+  it('should have 11 report types total', () => {
+    assert.equal(Object.keys(reportTypes).length, 11);
   });
 
   it('zod enum should accept new report types', () => {
@@ -41,6 +44,9 @@ describe('Analytics tool - reportTypes', () => {
     assert.equal(schema.parse('averageClickPosition'), 'averageClickPosition');
     assert.equal(schema.parse('sessionDetails'), 'sessionDetails');
     assert.equal(schema.parse('sessionListTable'), 'sessionListTable');
+    assert.equal(schema.parse('tileDataContent'), 'tileDataContent');
+    assert.equal(schema.parse('tileDataMetrics1'), 'tileDataMetrics1');
+    assert.equal(schema.parse('tileDataMetrics2'), 'tileDataMetrics2');
   });
 
   it('zod enum should reject invalid report types', () => {
