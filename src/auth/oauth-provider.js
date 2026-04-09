@@ -109,9 +109,9 @@ class SUMcpOAuthProvider {
     await this.store.saveOAuthSession(sessionId, session);
 
     // Build SU authorize URL
-    // SU's /authorise_redirect expects: client_id, redirect_uri, state
+    // SU's /auth/authorise_redirect expects: client_id, redirect_uri, state
     // We pass our sessionId as state so we can correlate the callback
-    const suAuthorizeUrl = `${session.instanceUrl}/authorise_redirect`
+    const suAuthorizeUrl = `${session.instanceUrl}/auth/authorise_redirect`
       + `?client_id=${encodeURIComponent(suClientId)}`
       + `&redirect_uri=${encodeURIComponent(this.mcpCallbackUrl)}`
       + `&state=${encodeURIComponent(sessionId)}`;
