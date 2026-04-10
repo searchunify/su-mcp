@@ -89,10 +89,12 @@ class MemoryStore {
     this._data.set(key, value);
     if (this._timers.has(key)) clearTimeout(this._timers.get(key));
     if (ttlSeconds > 0) {
+      // Node.js setTimeout max delay is 2^31-1 ms (~24.8 days); cap to prevent overflow
+      const ms = Math.min(ttlSeconds * 1000, 2147483647);
       this._timers.set(key, setTimeout(() => {
         this._data.delete(key);
         this._timers.delete(key);
-      }, ttlSeconds * 1000));
+      }, ms));
     }
   }
 
