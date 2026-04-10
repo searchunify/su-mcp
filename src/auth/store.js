@@ -119,6 +119,7 @@ class MemoryStore {
   // --- Access Tokens ---
   async saveAccessToken(token, data) { this._set(`access:${token}`, encryptPayload(data, "suTokens"), ACCESS_TOKEN_TTL); }
   async getAccessToken(token) { const d = this._get(`access:${token}`); return d ? decryptPayload({ ...d }, true) : null; }
+  async deleteAccessToken(token) { this._del(`access:${token}`); }
 
   // --- Refresh Tokens ---
   async saveRefreshToken(token, data) { this._set(`refresh:${token}`, encryptPayload(data, "suTokens"), REFRESH_TOKEN_TTL); }
@@ -191,6 +192,7 @@ class RedisStore {
   // --- Access Tokens ---
   async saveAccessToken(token, data) { await this._set(`access:${token}`, encryptPayload(data, "suTokens"), ACCESS_TOKEN_TTL); }
   async getAccessToken(token) { const d = await this._get(`access:${token}`); return d ? decryptPayload(d, true) : null; }
+  async deleteAccessToken(token) { await this._del(`access:${token}`); }
 
   // --- Refresh Tokens ---
   async saveRefreshToken(token, data) { await this._set(`refresh:${token}`, encryptPayload(data, "suTokens"), REFRESH_TOKEN_TTL); }

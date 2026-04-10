@@ -95,17 +95,19 @@ class SUMcpOAuthProvider {
    * @param {string} instanceUrl - SU instance URL
    * @param {string} suClientId - SU OAuth client ID (registered on the user's SU instance)
    * @param {string} suClientSecret - SU OAuth client secret
+   * @param {string} uid - Search Client UID (used in search/analytics API calls)
    */
-  async handleAuthorizeStart(sessionId, instanceUrl, suClientId, suClientSecret) {
+  async handleAuthorizeStart(sessionId, instanceUrl, suClientId, suClientSecret, uid) {
     const session = await this.store.getOAuthSession(sessionId);
     if (!session) {
       throw new Error("Invalid or expired session");
     }
 
-    // Store instance URL and SU OAuth client creds in the session
+    // Store instance URL, SU OAuth client creds, and UID in the session
     session.instanceUrl = instanceUrl.replace(/\/$/, "");
     session.suClientId = suClientId;
     session.suClientSecret = suClientSecret;
+    session.uid = uid;
     await this.store.saveOAuthSession(sessionId, session);
 
     // Build SU authorize URL
@@ -147,6 +149,7 @@ class SUMcpOAuthProvider {
         instanceUrl: session.instanceUrl,
         suClientId: session.suClientId,
         suClientSecret: session.suClientSecret,
+        uid: session.uid,
       },
     });
 
@@ -322,11 +325,7 @@ class SUMcpOAuthProvider {
     if (token_type_hint === "refresh_token") {
       await this.store.deleteRefreshToken(token);
     } else {
-      const key = `su-mcp:access:${token}`;
-      const deleted = await this.store.redis.del(key);
-      if (!deleted) {
-        await this.store.deleteRefreshToken(token);
-      }
+      await this.store.deleteAccessToken(token);
     }
   }
 

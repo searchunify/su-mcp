@@ -97,6 +97,12 @@ function getInstanceFormHTML({ formAction, sessionId }) {
       </div>
 
       <div class="form-group">
+        <label for="uid">Search Client UID</label>
+        <input type="text" id="uid" name="uid" placeholder="e.g. abc123def456" required autocomplete="off">
+        <div class="help-text">Found in SearchUnify Admin &gt; Search Clients</div>
+      </div>
+
+      <div class="form-group">
         <label for="su_client_id">OAuth Client ID</label>
         <input type="text" id="su_client_id" name="su_client_id" placeholder="Enter OAuth Client ID" required autocomplete="off">
         <div class="help-text">Found in SearchUnify Admin &gt; OAuth Clients</div>
@@ -124,9 +130,10 @@ function getInstanceFormHTML({ formAction, sessionId }) {
 
     form.addEventListener('submit', (e) => {
       const instance = document.getElementById('instance').value.trim();
+      const uid = document.getElementById('uid').value.trim();
       const clientId = document.getElementById('su_client_id').value.trim();
       const clientSecret = document.getElementById('su_client_secret').value.trim();
-      if (!instance || !clientId || !clientSecret) {
+      if (!instance || !uid || !clientId || !clientSecret) {
         e.preventDefault();
         errorDiv.textContent = 'All fields are required.';
         errorDiv.style.display = 'block';

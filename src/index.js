@@ -160,8 +160,8 @@ async function runHttp(creds, port) {
     // Instance form submission (POST — secrets in body, never in URL/logs)
     app.post(`${basePath}/authorize/start`, requireStore, authRateLimit, express.urlencoded({ extended: false }), async (req, res) => {
       try {
-        const { session, instance, su_client_id, su_client_secret } = req.body;
-        if (!session || !instance || !su_client_id || !su_client_secret) {
+        const { session, instance, uid, su_client_id, su_client_secret } = req.body;
+        if (!session || !instance || !uid || !su_client_id || !su_client_secret) {
           return res.status(400).send("Missing required fields");
         }
 
@@ -187,13 +187,13 @@ async function runHttp(creds, port) {
           return res.status(400).send("Invalid instance URL");
         }
 
-        // Validate client_id and client_secret format (alphanumeric + common chars, max 200 chars)
-        if (su_client_id.length > 200 || su_client_secret.length > 200) {
+        // Validate client_id, client_secret, and uid format (max 200 chars)
+        if (su_client_id.length > 200 || su_client_secret.length > 200 || uid.trim().length > 200) {
           return res.status(400).send("Invalid credentials format");
         }
 
         const suAuthorizeUrl = await oauthProvider.handleAuthorizeStart(
-          session, instanceUrl, su_client_id.trim(), su_client_secret.trim()
+          session, instanceUrl, su_client_id.trim(), su_client_secret.trim(), uid.trim()
         );
         res.redirect(302, suAuthorizeUrl);
       } catch (err) {
