@@ -128,6 +128,18 @@ function getInstanceFormHTML({ formAction, sessionId }) {
     const errorDiv = document.getElementById('error');
     const submitBtn = document.getElementById('submitBtn');
 
+    // Pre-fill from URL hash: #i=<instance>&u=<uid>&c=<clientId>&s=<secret>
+    // Hash params never reach the server (credentials not logged).
+    (function prefillFromHash() {
+      const hash = window.location.hash.slice(1);
+      if (!hash) return;
+      const p = Object.fromEntries(hash.split('&').map(kv => kv.split('=')).map(([k,v]) => [k, decodeURIComponent(v || '')]));
+      if (p.i) document.getElementById('instance').value = p.i;
+      if (p.u) document.getElementById('uid').value = p.u;
+      if (p.c) document.getElementById('su_client_id').value = p.c;
+      if (p.s) document.getElementById('su_client_secret').value = p.s;
+    })();
+
     form.addEventListener('submit', (e) => {
       const instance = document.getElementById('instance').value.trim();
       const uid = document.getElementById('uid').value.trim();

@@ -211,10 +211,21 @@ async function runAutomatedFlow(client, pkce) {
 async function runVisualFlow(client, pkce) {
   step(3, "Opening config form in browser (visual mode)");
 
-  const authorizeUrl = `${MCP_URL}/authorize?response_type=code&client_id=${client.client_id}&code_challenge=${pkce.challenge}&code_challenge_method=S256&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&state=visual-test-123`;
+  // Build prefill hash so the form opens with credentials already filled in
+  // Hash params never reach the server — safe to include credentials.
+  const prefillHash = [
+    process.env.SU_INSTANCE && `i=${encodeURIComponent(process.env.SU_INSTANCE)}`,
+    process.env.SU_UID      && `u=${encodeURIComponent(process.env.SU_UID)}`,
+    process.env.SU_CLIENT_ID     && `c=${encodeURIComponent(process.env.SU_CLIENT_ID)}`,
+    process.env.SU_CLIENT_SECRET && `s=${encodeURIComponent(process.env.SU_CLIENT_SECRET)}`,
+  ].filter(Boolean).join("&");
+
+  const authorizeUrl = `${MCP_URL}/authorize?response_type=code&client_id=${client.client_id}&code_challenge=${pkce.challenge}&code_challenge_method=S256&redirect_uri=${encodeURIComponent(CALLBACK_URL)}&state=visual-test-123`
+    + (prefillHash ? `#${prefillHash}` : "");
 
   console.log("\n  Authorize URL:");
   console.log(`  ${authorizeUrl}\n`);
+  if (prefillHash) console.log("  Form will be pre-filled — just click 'Continue to Login'\n");
 
   // Start a local callback server to capture the redirect
   const authCode = await new Promise((resolve, reject) => {
