@@ -234,23 +234,31 @@ async function runHttp(creds, port) {
 
       try {
         const token = req.headers.authorization?.split(" ")[1];
-        if (token) {
-          const suTokens = await oauthProvider.getSuTokensForMcpToken(token);
-          console.error(`[MCP] suTokens: ${suTokens ? `OK uid=${suTokens.uid}` : "NULL"}`);
-          if (suTokens) {
-            const requestCreds = buildCredsFromSuToken(suTokens);
-            console.error(`[MCP] creds built OK, calling transport`);
-            await httpCredsStorage.run(requestCreds, async () => {
-              await transport.handleRequest(req, res, req.body);
-            });
-            console.error(`[MCP] transport.handleRequest completed`);
-            return;
-          }
+        const suTokens = token ? await oauthProvider.getSuTokensForMcpToken(token) : null;
+        if (!suTokens) {
+          res.status(401).json({ error: "Invalid or expired token" });
+          return;
         }
-        res.status(401).json({ error: "Invalid or expired token" });
+
+        const requestCreds = buildCredsFromSuToken(suTokens);
+
+        // SDK 1.28.0 stateless mode: create fresh server+transport per request.
+        // Sharing one server across requests breaks notifications/initialized
+        // because the second POST arrives with no prior initialize context.
+        const reqServer = createMcpServer();
+        const getCreds = () => requestCreds;
+        await initializeTools({ server: reqServer, creds: requestCreds, getCreds });
+        const reqTransport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+        await reqServer.connect(reqTransport);
+
+        await reqTransport.handleRequest(req, res, req.body);
+
+        res.on("close", () => {
+          reqTransport.close().catch(() => {});
+          reqServer.close().catch(() => {});
+        });
       } catch (err) {
         console.error(`[MCP] HANDLER ERROR: ${err.message}`);
-        console.error(err.stack);
         if (!res.headersSent) res.status(500).json({ error: "server_error", error_description: err.message });
       }
     });
@@ -261,10 +269,18 @@ async function runHttp(creds, port) {
     const ts = new Date().toISOString();
     const method = req.method ?? "";
     console.error(`[MCP HTTP] ${ts} ${method} /mcp (headers)`);
-    const headerCreds = getCredsFromHeaders(req.headers || {});
-    const requestCreds = headerCreds || creds;
+    const requestCreds = getCredsFromHeaders(req.headers || {}) || creds;
+    const reqServer = createMcpServer();
+    const getCreds = () => httpCredsStorage.getStore() ?? requestCreds;
+    await initializeTools({ server: reqServer, creds: requestCreds, getCreds });
+    const reqTransport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    await reqServer.connect(reqTransport);
     await httpCredsStorage.run(requestCreds, async () => {
-      await transport.handleRequest(req, res, req.body);
+      await reqTransport.handleRequest(req, res, req.body);
+    });
+    res.on("close", () => {
+      reqTransport.close().catch(() => {});
+      reqServer.close().catch(() => {});
     });
   });
 
@@ -273,10 +289,18 @@ async function runHttp(creds, port) {
     const ts = new Date().toISOString();
     const method = req.method ?? "";
     console.error(`[MCP HTTP] ${ts} ${method} / (legacy)`);
-    const headerCreds = getCredsFromHeaders(req.headers || {});
-    const requestCreds = headerCreds || creds;
+    const requestCreds = getCredsFromHeaders(req.headers || {}) || creds;
+    const reqServer = createMcpServer();
+    const getCreds = () => httpCredsStorage.getStore() ?? requestCreds;
+    await initializeTools({ server: reqServer, creds: requestCreds, getCreds });
+    const reqTransport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    await reqServer.connect(reqTransport);
     await httpCredsStorage.run(requestCreds, async () => {
-      await transport.handleRequest(req, res, req.body);
+      await reqTransport.handleRequest(req, res, req.body);
+    });
+    res.on("close", () => {
+      reqTransport.close().catch(() => {});
+      reqServer.close().catch(() => {});
     });
   });
 
