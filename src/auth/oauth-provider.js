@@ -3,6 +3,7 @@ import http from "node:http";
 import https from "node:https";
 import { createStore, ACCESS_TOKEN_TTL, REFRESH_TOKEN_TTL } from "./store.js";
 import { getInstanceFormHTML } from "./config-form.js";
+import { InvalidTokenError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 
 function generateToken() {
   return crypto.randomBytes(32).toString("hex");
@@ -247,7 +248,9 @@ class SUMcpOAuthProvider {
    * The SDK handles PKCE validation before calling this.
    */
   async exchangeAuthorizationCode(client, authorizationCode) {
+    console.error(`[OAuth] exchangeAuthorizationCode() — code: ${authorizationCode?.slice(0, 8)}...`);
     const codeData = await this.store.getAuthCode(authorizationCode);
+    console.error(`[OAuth] exchangeAuthorizationCode() — authCode lookup: ${codeData ? "FOUND" : "NOT FOUND"}`);
     if (!codeData) {
       throw new Error("Invalid or expired authorization code");
     }
@@ -271,6 +274,7 @@ class SUMcpOAuthProvider {
       suTokens: codeData.suTokens,
     });
 
+    console.error(`[OAuth] exchangeAuthorizationCode() — access token stored: ${accessToken.slice(0, 8)}...`);
     return {
       access_token: accessToken,
       token_type: "bearer",
@@ -319,9 +323,12 @@ class SUMcpOAuthProvider {
    * Verifies an access token and returns auth info.
    */
   async verifyAccessToken(token) {
+    console.error(`[OAuth] verifyAccessToken() — looking up token: ${token?.slice(0, 8)}...`);
     const tokenData = await this.store.getAccessToken(token);
+    console.error(`[OAuth] verifyAccessToken() — result: ${tokenData ? "FOUND" : "NOT FOUND"}`);
     if (!tokenData) {
-      throw new Error("Invalid or expired access token");
+      // Throw InvalidTokenError so SDK returns 401 (not 500) and mcp-remote can retry OAuth
+      throw new InvalidTokenError("Invalid or expired access token");
     }
 
     return {
