@@ -224,9 +224,11 @@ async function runHttp(creds, port) {
     });
 
     // MCP endpoint with bearer auth — OAuth-authenticated requests
+    // SDK 1.28.0: requireBearerAuth uses { verifier }, sets req.auth, and
+    // handleRequest requires (req, res, parsedBody) — body must be pre-parsed.
     const bearerAuth = requireBearerAuth({ verifier: oauthProvider });
 
-    app.all(`${basePath}/mcp`, bearerAuth, async (req, res) => {
+    app.all(`${basePath}/mcp`, express.json(), bearerAuth, async (req, res) => {
       const ts = new Date().toISOString();
       console.error(`[MCP HTTP] ${ts} ${req.method} ${basePath}/mcp (OAuth)`);
 
@@ -237,7 +239,7 @@ async function runHttp(creds, port) {
         if (suTokens) {
           const requestCreds = buildCredsFromSuToken(suTokens);
           httpCredsStorage.run(requestCreds, () => {
-            transport.handleRequest(req, res);
+            transport.handleRequest(req, res, req.body);
           });
           return;
         }
@@ -247,26 +249,26 @@ async function runHttp(creds, port) {
   }
 
   // Non-OAuth MCP endpoint — header-based auth (backward compatible)
-  app.all("/mcp", (req, res) => {
+  app.all("/mcp", express.json(), (req, res) => {
     const ts = new Date().toISOString();
     const method = req.method ?? "";
     console.error(`[MCP HTTP] ${ts} ${method} /mcp (headers)`);
     const headerCreds = getCredsFromHeaders(req.headers || {});
     const requestCreds = headerCreds || creds;
     httpCredsStorage.run(requestCreds, () => {
-      transport.handleRequest(req, res);
+      transport.handleRequest(req, res, req.body);
     });
   });
 
   // Legacy root endpoint for backward compatibility
-  app.all("/", (req, res) => {
+  app.all("/", express.json(), (req, res) => {
     const ts = new Date().toISOString();
     const method = req.method ?? "";
     console.error(`[MCP HTTP] ${ts} ${method} / (legacy)`);
     const headerCreds = getCredsFromHeaders(req.headers || {});
     const requestCreds = headerCreds || creds;
     httpCredsStorage.run(requestCreds, () => {
-      transport.handleRequest(req, res);
+      transport.handleRequest(req, res, req.body);
     });
   });
 
