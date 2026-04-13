@@ -452,36 +452,60 @@ All header names use the `searchunify-` prefix (lowercase):
 
 ### Integration 4: Claude Public Directory (OAuth)
 
-When installed from Claude's public directory, authentication is handled via OAuth 2.0 using a **proxy flow** — the MCP server delegates login to your SearchUnify instance.
-
-**How it works:**
-1. Claude opens a connection form where you enter:
-   - Your SearchUnify instance URL (e.g. `https://your-instance.searchunify.com`)
-   - Your **Search Client UID** (found in SearchUnify Admin → Search Clients)
-   - Your **SU OAuth Client ID** and **Client Secret** (found in SearchUnify Admin → OAuth Clients)
-2. You are redirected to your SearchUnify login page to authenticate
-3. After login, an MCP Bearer token is issued and stored securely (Redis-backed, AES-256 encrypted)
-4. All subsequent tool calls use this token — no credentials are stored in Claude
+When installed from Claude's public directory, authentication is handled via OAuth 2.0 using a **proxy flow** — the MCP server delegates login to your SearchUnify instance. No API keys or passwords are stored in Claude.
 
 **OAuth proxy flow:**
 ```
-Claude → MCP /authorize (form) → SU /auth/authorise_redirect (login) → MCP /su-callback → Bearer token
+Claude → MCP /authorize (form) → SU /auth/authorise_redirect (SU login) → MCP /su-callback → Bearer token
 ```
 
-**For server operators** — to enable OAuth on your deployment, set these environment variables:
+---
+
+#### Step 1 — Register an OAuth Client in SearchUnify Admin
+
+Before connecting, an OAuth client must be registered in your SearchUnify instance with the MCP server's callback URL as the `redirect_uri`.
+
+1. Log in to your SearchUnify Admin panel
+2. Navigate to **OAuth Clients** (usually under Settings or Developer)
+3. Create a new OAuth client with:
+   - **Name:** e.g. `Claude MCP Connector`
+   - **Redirect URI:** `<MCP_ISSUER_URL>/su-callback`  
+     e.g. `https://mcp.searchunify.com/su-callback`
+   - **Grant Types:** `authorization_code`
+   - **Scope:** `All` (or the scopes required for search and analytics)
+4. Note the generated **Client ID** and **Client Secret** — users will need these when connecting
+
+---
+
+#### Step 2 — Configure the MCP Server (server operators)
+
+Set these environment variables before starting the MCP server:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `OAUTH_ENCRYPTION_KEY` | Yes | 64-character hex string for AES-256 encryption of stored tokens |
 | `MCP_ISSUER_URL` | Yes | Public HTTPS URL of your MCP server (e.g., `https://mcp.searchunify.com`) |
-| `REDIS_URL` | No | Redis connection URL (e.g., `redis://localhost:6379`). Omit to use in-memory store (tokens lost on restart). |
+| `REDIS_URL` | No | Redis connection URL (e.g., `redis://localhost:6379`). Omit to use in-memory store (tokens lost on server restart). |
 
 Generate an encryption key:
 ```bash
 openssl rand -hex 32
 ```
 
-> **Note:** The SU OAuth Client registered in your SearchUnify instance must have its `redirect_uri` set to `<MCP_ISSUER_URL>/su-callback` (e.g. `https://mcp.searchunify.com/su-callback`).
+---
+
+#### Step 3 — Connect from Claude
+
+When a user connects via Claude's directory:
+
+1. Claude opens the SearchUnify connection form
+2. The user enters:
+   - **SearchUnify Instance URL** — e.g. `https://your-instance.searchunify.com`
+   - **Search Client UID** — found in SearchUnify Admin → Search Clients
+   - **OAuth Client ID** — from the client registered in Step 1
+   - **OAuth Client Secret** — from the client registered in Step 1
+3. The user is redirected to their SearchUnify login page
+4. After login, an MCP Bearer token is issued and all tools are available in Claude
 
 ---
 
