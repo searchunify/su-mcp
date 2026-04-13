@@ -238,8 +238,8 @@ async function runHttp(creds, port) {
         const suTokens = await oauthProvider.getSuTokensForMcpToken(token);
         if (suTokens) {
           const requestCreds = buildCredsFromSuToken(suTokens);
-          httpCredsStorage.run(requestCreds, () => {
-            transport.handleRequest(req, res, req.body);
+          await httpCredsStorage.run(requestCreds, async () => {
+            await transport.handleRequest(req, res, req.body);
           });
           return;
         }
@@ -249,26 +249,26 @@ async function runHttp(creds, port) {
   }
 
   // Non-OAuth MCP endpoint — header-based auth (backward compatible)
-  app.all("/mcp", express.json(), (req, res) => {
+  app.all("/mcp", express.json(), async (req, res) => {
     const ts = new Date().toISOString();
     const method = req.method ?? "";
     console.error(`[MCP HTTP] ${ts} ${method} /mcp (headers)`);
     const headerCreds = getCredsFromHeaders(req.headers || {});
     const requestCreds = headerCreds || creds;
-    httpCredsStorage.run(requestCreds, () => {
-      transport.handleRequest(req, res, req.body);
+    await httpCredsStorage.run(requestCreds, async () => {
+      await transport.handleRequest(req, res, req.body);
     });
   });
 
   // Legacy root endpoint for backward compatibility
-  app.all("/", express.json(), (req, res) => {
+  app.all("/", express.json(), async (req, res) => {
     const ts = new Date().toISOString();
     const method = req.method ?? "";
     console.error(`[MCP HTTP] ${ts} ${method} / (legacy)`);
     const headerCreds = getCredsFromHeaders(req.headers || {});
     const requestCreds = headerCreds || creds;
-    httpCredsStorage.run(requestCreds, () => {
-      transport.handleRequest(req, res, req.body);
+    await httpCredsStorage.run(requestCreds, async () => {
+      await transport.handleRequest(req, res, req.body);
     });
   });
 
