@@ -192,8 +192,23 @@ class RedisStore {
   async deleteAuthCode(code) { await this._del(`authcode:${code}`); }
 
   // --- Access Tokens ---
-  async saveAccessToken(token, data) { await this._set(`access:${token}`, encryptPayload(data, "suTokens"), ACCESS_TOKEN_TTL); }
-  async getAccessToken(token) { const d = await this._get(`access:${token}`); return d ? decryptPayload(d, true) : null; }
+  async saveAccessToken(token, data) {
+    const key = `access:${token}`;
+    await this._set(key, encryptPayload(data, "suTokens"), ACCESS_TOKEN_TTL);
+    // Immediately verify the write succeeded
+    const verify = await this._get(key);
+    console.error(`[Redis] saveAccessToken — key su-mcp:${key} write=${verify ? "OK" : "FAILED"}`);
+  }
+  async getAccessToken(token) {
+    const d = await this._get(`access:${token}`);
+    if (!d) { console.error(`[Redis] getAccessToken — NOT FOUND for token: ${token?.slice(0,8)}...`); return null; }
+    try {
+      return decryptPayload(d, true);
+    } catch (err) {
+      console.error(`[Redis] getAccessToken — DECRYPT ERROR for token ${token?.slice(0,8)}...: ${err.message}`);
+      return null;
+    }
+  }
   async deleteAccessToken(token) { await this._del(`access:${token}`); }
 
   // --- Refresh Tokens ---
