@@ -101,7 +101,13 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         break;
       case reportTypes.averageClickPosition:
         console.error('averageClickPosition triggered');
-        analyticsResponse = await Analytics.getAverageClickPosition({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
+        analyticsResponse = await Analytics.getAverageClickPosition({
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+          tenantId: credsForRequest.config.tenantId,
+          internalUser: 'all',
+        });
         break;
       case reportTypes.sessionDetails: {
         console.error('sessionDetails triggered');
