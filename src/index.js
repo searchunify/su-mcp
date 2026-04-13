@@ -224,7 +224,7 @@ async function runHttp(creds, port) {
     });
 
     // MCP endpoint with bearer auth — OAuth-authenticated requests
-    const bearerAuth = requireBearerAuth({ provider: oauthProvider });
+    const bearerAuth = requireBearerAuth({ verifier: oauthProvider });
 
     app.all(`${basePath}/mcp`, bearerAuth, async (req, res) => {
       const ts = new Date().toISOString();
