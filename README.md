@@ -452,30 +452,36 @@ All header names use the `searchunify-` prefix (lowercase):
 
 ### Integration 4: Claude Public Directory (OAuth)
 
-When installed from Claude's public directory, authentication is handled via OAuth 2.0 — no local credentials file or HTTP headers needed.
+When installed from Claude's public directory, authentication is handled via OAuth 2.0 using a **proxy flow** — the MCP server delegates login to your SearchUnify instance.
 
 **How it works:**
-1. Click "Connect SearchUnify" in Claude's integrations directory
-2. A configuration form appears where you enter:
-   - Your SearchUnify instance URL
-   - Authentication type (API Key or Client Credentials)
-   - Your API Key or Client ID/Secret
-   - Search Client UID
-3. Credentials are validated against your SearchUnify instance
-4. Once connected, all tools are available immediately
+1. Claude opens a connection form where you enter:
+   - Your SearchUnify instance URL (e.g. `https://your-instance.searchunify.com`)
+   - Your **Search Client UID** (found in SearchUnify Admin → Search Clients)
+   - Your **SU OAuth Client ID** and **Client Secret** (found in SearchUnify Admin → OAuth Clients)
+2. You are redirected to your SearchUnify login page to authenticate
+3. After login, an MCP Bearer token is issued and stored securely (Redis-backed, AES-256 encrypted)
+4. All subsequent tool calls use this token — no credentials are stored in Claude
+
+**OAuth proxy flow:**
+```
+Claude → MCP /authorize (form) → SU /auth/authorise_redirect (login) → MCP /su-callback → Bearer token
+```
 
 **For server operators** — to enable OAuth on your deployment, set these environment variables:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `REDIS_URL` | Yes | Redis connection URL (e.g., `redis://localhost:6379`) |
-| `OAUTH_ENCRYPTION_KEY` | Yes | 64-character hex string for AES-256 encryption of stored credentials |
+| `OAUTH_ENCRYPTION_KEY` | Yes | 64-character hex string for AES-256 encryption of stored tokens |
 | `MCP_ISSUER_URL` | Yes | Public HTTPS URL of your MCP server (e.g., `https://mcp.searchunify.com`) |
+| `REDIS_URL` | No | Redis connection URL (e.g., `redis://localhost:6379`). Omit to use in-memory store (tokens lost on restart). |
 
 Generate an encryption key:
 ```bash
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+openssl rand -hex 32
 ```
+
+> **Note:** The SU OAuth Client registered in your SearchUnify instance must have its `redirect_uri` set to `<MCP_ISSUER_URL>/su-callback` (e.g. `https://mcp.searchunify.com/su-callback`).
 
 ---
 
@@ -537,6 +543,21 @@ MCP_HTTP_URL=http://localhost:4000 node scripts/test-mcp-client.js http
 
 The test client connects, lists all available tools, pings the server, and optionally calls the `search` and `get-filter-options` tools with sample queries.
 
+**Test OAuth flow** (server must be running with `OAUTH_ENCRYPTION_KEY` and `MCP_ISSUER_URL` set):
+
+```bash
+# Opens browser — fill the form and log in to complete the flow
+npm run test:oauth:visual
+
+# With pre-filled credentials (set env vars to skip manual entry):
+SU_INSTANCE=https://your-instance.searchunify.com \
+SU_UID=<search_client_uid> \
+SU_AUTH_TYPE=clientCredentials \
+SU_CLIENT_ID=<oauth_client_id> \
+SU_CLIENT_SECRET=<oauth_client_secret> \
+npm run test:oauth:visual
+```
+
 **Unit tests** (no credentials needed):
 
 ```bash
@@ -565,9 +586,9 @@ su-mcp/
     ├── input/
     │   └── creds.json          # Credentials file (user-provided, not in repo)
     ├── auth/
-    │   ├── oauth-provider.js   # MCP OAuth server provider (PKCE, auth code, tokens)
-    │   ├── redis-store.js      # Redis-backed encrypted credential and token storage
-    │   └── config-form.js      # HTML configuration form for OAuth authorize step
+    │   ├── oauth-provider.js   # MCP OAuth proxy provider (PKCE, SU delegation, token management)
+    │   ├── store.js            # Redis/MemoryStore with AES-256 encrypted token storage
+    │   └── config-form.js      # HTML configuration form (instance URL, UID, SU OAuth credentials)
     └── su-core/
         ├── index.js                  # Core tools initializer
         ├── su-core-search.js         # search and get-filter-options tools
@@ -592,15 +613,17 @@ su-mcp/
 ## Changelog
 
 ### v1.2.0
-- Added OAuth 2.0 with PKCE support for Claude public directory listing
-- Added tool safety annotations (readOnlyHint, destructiveHint, openWorldHint) to all tools
-- Added Redis-backed encrypted credential storage for OAuth flow
-- Added configuration form for OAuth authorization step
+- Added OAuth 2.0 proxy flow for Claude public directory listing (PKCE, Dynamic Client Registration)
+- OAuth delegates authentication to the SU instance login page — no passwords stored in MCP server
+- Added `uid` (Search Client UID) to OAuth form and token chain so all tools work post-auth
+- Added Redis/MemoryStore with AES-256-GCM encryption for tokens; falls back to in-memory if no `REDIS_URL`
+- Added `setTimeout` overflow fix for 30-day refresh token TTL in MemoryStore
+- Added configuration form (instance URL, UID, SU OAuth Client ID/Secret)
+- Fixed SDK 1.28.0 compatibility: `requireBearerAuth` uses `{ verifier }`, `handleRequest` takes `(req, res, req.body)`, fresh `McpServer`+`StreamableHTTPServerTransport` per request
 - Upgraded `@modelcontextprotocol/sdk` to `1.28.0`
 - Added `express` and `ioredis` dependencies
-- Added privacy policy and support information
-- Added usage examples to documentation
 - OAuth is optional — existing stdio and HTTP header auth continue to work unchanged
+- Added OAuth full-flow test script: `npm run test:oauth:visual`
 
 ### v1.1.0
 - Added `get-search-clients` tool — list all search clients configured in the instance
