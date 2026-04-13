@@ -138,12 +138,21 @@ class SUMcpOAuthProvider {
     }
 
     // Exchange SU auth code for SU access token using the per-session SU client creds
-    const suTokens = await this._exchangeSuCode(
-      session.instanceUrl, suAuthCode, session.suClientId, session.suClientSecret
-    );
+    console.error(`[OAuth] handleSuCallback() — exchanging SU code at: ${session.instanceUrl}/oauth/token/ clientId: ${session.suClientId?.slice(0, 8)}...`);
+    let suTokens;
+    try {
+      suTokens = await this._exchangeSuCode(
+        session.instanceUrl, suAuthCode, session.suClientId, session.suClientSecret
+      );
+      console.error(`[OAuth] handleSuCallback() — SU token exchange SUCCESS, has access_token: ${!!(suTokens.access_token || suTokens.accessToken)}`);
+    } catch (err) {
+      console.error(`[OAuth] handleSuCallback() — SU token exchange FAILED: ${err.message}`);
+      throw err;
+    }
 
     // Generate MCP auth code and store it with the SU tokens
     const mcpAuthCode = generateToken();
+    console.error(`[OAuth] handleSuCallback() — MCP auth code generated, redirecting to: ${session.redirectUri?.slice(0, 30)}...`);
     await this.store.saveAuthCode(mcpAuthCode, {
       clientId: session.clientId,
       redirectUri: session.redirectUri,
