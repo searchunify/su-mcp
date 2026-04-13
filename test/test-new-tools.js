@@ -13,7 +13,11 @@ describe('Analytics tool - reportTypes', () => {
     getAllSearchQuery: "getAllSearchQuery",
     getAllSearchConversion: "getAllSearchConversion",
     averageClickPosition: "averageClickPosition",
-    sessionDetails: "sessionDetails"
+    sessionDetails: "sessionDetails",
+    sessionListTable: "sessionListTable",
+    tileDataContent: "tileDataContent",
+    tileDataMetrics1: "tileDataMetrics1",
+    tileDataMetrics2: "tileDataMetrics2",
   };
 
   it('should include averageClickPosition report type', () => {
@@ -26,14 +30,23 @@ describe('Analytics tool - reportTypes', () => {
     assert.equal(reportTypes.sessionDetails, 'sessionDetails');
   });
 
-  it('should have 7 report types total', () => {
-    assert.equal(Object.keys(reportTypes).length, 7);
+  it('should include sessionListTable report type', () => {
+    assert.ok(reportTypes.sessionListTable);
+    assert.equal(reportTypes.sessionListTable, 'sessionListTable');
+  });
+
+  it('should have 11 report types total', () => {
+    assert.equal(Object.keys(reportTypes).length, 11);
   });
 
   it('zod enum should accept new report types', () => {
     const schema = z.enum(Object.values(reportTypes));
     assert.equal(schema.parse('averageClickPosition'), 'averageClickPosition');
     assert.equal(schema.parse('sessionDetails'), 'sessionDetails');
+    assert.equal(schema.parse('sessionListTable'), 'sessionListTable');
+    assert.equal(schema.parse('tileDataContent'), 'tileDataContent');
+    assert.equal(schema.parse('tileDataMetrics1'), 'tileDataMetrics1');
+    assert.equal(schema.parse('tileDataMetrics2'), 'tileDataMetrics2');
   });
 
   it('zod enum should reject invalid report types', () => {
@@ -49,7 +62,10 @@ describe('Analytics tool - schema', () => {
     reportType: z.string(),
     startDate: z.string(),
     endDate: z.string(),
-    count: z.number(),
+    count: z.number().min(1).max(500),
+    sessionId: z.string().optional(),
+    pageNumber: z.number().min(1).max(10).optional(),
+    startIndex: z.number().min(1).max(10).optional(),
   });
 
   it('should accept valid request', () => {
@@ -60,6 +76,62 @@ describe('Analytics tool - schema', () => {
       count: 10,
     });
     assert.equal(result.count, 10);
+  });
+
+  it('should accept sessionId for sessionDetails', () => {
+    const result = analyticsSchema.parse({
+      reportType: 'sessionDetails',
+      startDate: '2025-01-01',
+      endDate: '2025-01-31',
+      count: 50,
+      sessionId: '1649742483444046',
+    });
+    assert.equal(result.sessionId, '1649742483444046');
+  });
+
+  it('should accept sessionListTable report type with sessionId', () => {
+    const result = analyticsSchema.parse({
+      reportType: 'sessionListTable',
+      startDate: '2025-01-01',
+      endDate: '2025-01-31',
+      count: 50,
+      sessionId: '1649742483444046',
+    });
+    assert.equal(result.reportType, 'sessionListTable');
+  });
+
+  it('should reject count greater than 500', () => {
+    assert.throws(() => analyticsSchema.parse({
+      reportType: 'sessionDetails',
+      startDate: '2025-01-01',
+      endDate: '2025-01-31',
+      count: 501,
+    }));
+  });
+
+  it('should reject pageNumber greater than 10', () => {
+    assert.throws(() => analyticsSchema.parse({
+      reportType: 'getAllSearchQuery',
+      startDate: '2025-01-01',
+      endDate: '2025-01-31',
+      count: 100,
+      pageNumber: 11,
+    }));
+  });
+
+  it('should reject startIndex greater than 10 for session log', () => {
+    assert.throws(() => analyticsSchema.parse({
+      reportType: 'sessionDetails',
+      startDate: '2025-01-01',
+      endDate: '2025-01-31',
+      count: 100,
+      startIndex: 11,
+    }));
+  });
+
+  it('should accept sortByField page_view for session list table', () => {
+    const sortEnum = z.enum(['count', 'click', 'search', 'case', 'page_view', 'support', 'end_date', 'start_date']);
+    assert.equal(sortEnum.parse('page_view'), 'page_view');
   });
 });
 

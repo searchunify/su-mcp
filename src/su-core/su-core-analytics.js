@@ -8,37 +8,92 @@ const reportTypes = {
   getAllSearchQuery: "getAllSearchQuery",
   getAllSearchConversion: "getAllSearchConversion",
   averageClickPosition: "averageClickPosition",
-  sessionDetails: "sessionDetails"
+  sessionDetails: "sessionDetails",
+  sessionListTable: "sessionListTable",
+  /** POST /api/v2/content/tileDataContent — content-gap counts (failed/no-click/no-result, daily avgs) */
+  tileDataContent: "tileDataContent",
+  /** POST /api/v2/overview/tileDataMetrics1 — data.visitors is session count; searchUsers, uniqueUsersByDevice, email metrics */
+  tileDataMetrics1: "tileDataMetrics1",
+  /** POST /api/v2/overview/tileDataMetrics2 — searches, clicks, cases, withResult/withoutResult, uniqueSearches */
+  tileDataMetrics2: "tileDataMetrics2",
 };
 
 const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
   const c = () => (getCreds ? getCreds() : creds);
-  server.tool("analytics", "get analytics reports data from searchunify", {
-    reportType: z.enum(Object.values(reportTypes)).describe("type of analytics report to fetch data from"),
+  server.tool(
+    "analytics",
+    "Analytics reports from SearchUnify. For headline/count questions: tileDataContent = content-gap metrics (failed searches, no-click, no-result, sessions, daily averages). tileDataMetrics1 = session/visitor tile: the API field `visitors` is the session count (also exposed as `sessionCount` in MCP output); plus searchUsers, uniqueUsersByDevice, emptyEmailSessionCount, uniqueUsersByEmail. Ignore undefined placeholders for click/search/case fields on this endpoint. tileDataMetrics2 = search/click/conversion metrics (searches, withResult, withoutResult, uniqueSearches, clicks, clickedSessions, caseCount). Do not use tileDataMetrics1 for searches, clicks, cases, or with/without result — use tileDataMetrics2.",
+    {
+    reportType: z
+      .enum(Object.values(reportTypes))
+      .describe(
+        "Which report to fetch. Tile APIs: tileDataContent (content gap); tileDataMetrics1 (visitors = session count, searchUsers, uniqueUsersByDevice, email metrics); tileDataMetrics2 (search volume, results split, clicks, cases). Classification: searchQueryWith* / getAllSearchQuery. Conversion: getAllSearchConversion, averageClickPosition. Sessions: sessionDetails, sessionListTable."
+      ),
     startDate: z.string().describe("start date of the report"),
     endDate: z.string().describe("end date of the report"),
-    count: z.number().describe("number of records to be fetched"),
-
-  }, async ({ reportType, startDate, endDate, count }) => {
+    count: z.number().min(1).max(500).describe("number of records to be fetched (1-500)"),
+    sessionId: z.string().optional().describe("optional session cookie filter for sessionDetails (GET /api/v2/session/log/all) and sessionListTable (GET /api/v2/session/list/table)"),
+    pageNumber: z.number().min(1).max(10).optional().describe("page number for the 4 search classification reports (max 10 in MCP)"),
+    startIndex: z.number().min(1).max(10).optional().describe("pagination page for sessionDetails and sessionListTable (same as session log / list table APIs); max 10 in MCP; maps to API startIndex"),
+    sortByField: z
+      .enum(["count", "click", "search", "case", "page_view", "support", "end_date", "start_date"])
+      .optional()
+      .describe(
+        "Sort field: for search-classification reports use count (query frequency). For sessionListTable use click, search, case, page_view, support, end_date, or start_date. For sessionDetails (session log) use the same except page_view when not applicable — if you pass count here it is sent as click for classification reports only."
+      ),
+    sortType: z.enum(["asc", "desc"]).optional().describe("sort direction; defaults to desc where applicable"),
+  }, async ({ reportType, startDate, endDate, count, sessionId, pageNumber, startIndex, sortByField, sortType }) => {
     const credsForRequest = c();
     const Analytics = credsForRequest.suRestClient.Analytics();
     let analyticsResponse = {};
     switch(reportType){
       case reportTypes.searchQueryWithNoClicks:
         console.error('searchQueryWithNoClicks triggered');
-        analyticsResponse = await Analytics.searchQueryWithNoClicks({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
+        analyticsResponse = await Analytics.searchQueryWithNoClicks({
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+          count,
+          pageNumber,
+          sortByField,
+          sortType
+        });
         break;
       case reportTypes.searchQueryWithResult:
         console.error('searchQueryWithResult triggered');
-        analyticsResponse = await Analytics.searchQueryWithResult({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
+        analyticsResponse = await Analytics.searchQueryWithResult({
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+          count,
+          pageNumber,
+          sortByField,
+          sortType
+        });
         break;
       case reportTypes.searchQueryWithoutResults:
         console.error('searchQueryWithoutResults triggered');
-        analyticsResponse = await Analytics.searchQueryWithoutResults({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
+        analyticsResponse = await Analytics.searchQueryWithoutResults({
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+          count,
+          pageNumber,
+          sortByField,
+          sortType
+        });
         break;
       case reportTypes.getAllSearchQuery:
         console.error('getAllSearchQuery triggered');
-        analyticsResponse = await Analytics.getAllSearchQuery({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
+        analyticsResponse = await Analytics.getAllSearchQuery({
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+          count,
+          pageNumber,
+          sortByField,
+          sortType
+        });
         break;
       case reportTypes.getAllSearchConversion:
         console.error('getAllSearchConversion triggered');
@@ -46,12 +101,97 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         break;
       case reportTypes.averageClickPosition:
         console.error('averageClickPosition triggered');
-        analyticsResponse = await Analytics.getAverageClickPosition({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
+        analyticsResponse = await Analytics.getAverageClickPosition({
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+          tenantId: credsForRequest.config.tenantId,
+          internalUser: 'all',
+        });
         break;
-      case reportTypes.sessionDetails:
+      case reportTypes.sessionDetails: {
         console.error('sessionDetails triggered');
-        analyticsResponse = await Analytics.getSessionDetails({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
+        const sessionParams = {
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+          count,
+          sessionId,
+          startIndex,
+        };
+        if (sortByField !== undefined) {
+          sessionParams.sortByField =
+            sortByField === "count" ? "click" : sortByField;
+        }
+        if (sortType !== undefined) {
+          sessionParams.sortType = sortType;
+        }
+        analyticsResponse = await Analytics.getSessionDetails(sessionParams);
         break;
+      }
+      case reportTypes.sessionListTable: {
+        console.error('sessionListTable triggered');
+        const sessionParams = {
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+          count,
+          sessionId,
+          startIndex,
+        };
+        if (sortByField !== undefined) {
+          sessionParams.sortByField =
+            sortByField === "count" ? "click" : sortByField;
+        }
+        if (sortType !== undefined) {
+          sessionParams.sortType = sortType;
+        }
+        analyticsResponse = await Analytics.getSessionListTable(sessionParams);
+        break;
+      }
+      case reportTypes.tileDataContent: {
+        console.error("tileDataContent triggered");
+        const tileParams = {
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+        };
+        analyticsResponse = await Analytics.getTileDataContent(tileParams);
+        break;
+      }
+      case reportTypes.tileDataMetrics1: {
+        console.error("tileDataMetrics1 triggered");
+        const tileParams = {
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+        };
+        analyticsResponse = await Analytics.getTileDataMetrics1(tileParams);
+        // API `visitors` is session count; duplicate as sessionCount for model-facing clarity
+        {
+          const d = analyticsResponse?.data;
+          if (d && typeof d === "object" && !Array.isArray(d)) {
+            analyticsResponse = {
+              ...analyticsResponse,
+              data: {
+                ...d,
+                sessionCount: d.visitors,
+              },
+            };
+          }
+        }
+        break;
+      }
+      case reportTypes.tileDataMetrics2: {
+        console.error("tileDataMetrics2 triggered");
+        const tileParams = {
+          searchClientId: credsForRequest.config.uid,
+          startDate,
+          endDate,
+        };
+        analyticsResponse = await Analytics.getTileDataMetrics2(tileParams);
+        break;
+      }
       default:
         console.error('invalid reportType ', reportType);
     }
