@@ -232,19 +232,27 @@ async function runHttp(creds, port) {
       const ts = new Date().toISOString();
       console.error(`[MCP HTTP] ${ts} ${req.method} ${basePath}/mcp (OAuth)`);
 
-      // Extract SU tokens from the bearer token and build credentials
-      const token = req.headers.authorization?.split(" ")[1];
-      if (token) {
-        const suTokens = await oauthProvider.getSuTokensForMcpToken(token);
-        if (suTokens) {
-          const requestCreds = buildCredsFromSuToken(suTokens);
-          await httpCredsStorage.run(requestCreds, async () => {
-            await transport.handleRequest(req, res, req.body);
-          });
-          return;
+      try {
+        const token = req.headers.authorization?.split(" ")[1];
+        if (token) {
+          const suTokens = await oauthProvider.getSuTokensForMcpToken(token);
+          console.error(`[MCP] suTokens: ${suTokens ? `OK uid=${suTokens.uid}` : "NULL"}`);
+          if (suTokens) {
+            const requestCreds = buildCredsFromSuToken(suTokens);
+            console.error(`[MCP] creds built OK, calling transport`);
+            await httpCredsStorage.run(requestCreds, async () => {
+              await transport.handleRequest(req, res, req.body);
+            });
+            console.error(`[MCP] transport.handleRequest completed`);
+            return;
+          }
         }
+        res.status(401).json({ error: "Invalid or expired token" });
+      } catch (err) {
+        console.error(`[MCP] HANDLER ERROR: ${err.message}`);
+        console.error(err.stack);
+        if (!res.headersSent) res.status(500).json({ error: "server_error", error_description: err.message });
       }
-      res.status(401).json({ error: "Invalid or expired token" });
     });
   }
 
