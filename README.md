@@ -492,6 +492,8 @@ Generate an encryption key:
 openssl rand -hex 32
 ```
 
+> **Security:** Never commit `OAUTH_ENCRYPTION_KEY` or `REDIS_URL` to version control. Use environment variables, Docker secrets, or a secrets manager.
+
 ---
 
 #### Step 3 — Connect from Claude
