@@ -206,6 +206,7 @@ async function runHttp(creds, port) {
     app.get(`${basePath}/su-callback`, requireStore, authRateLimit, async (req, res) => {
       try {
         const { code, state } = req.query;
+        console.error(`[OAuth] /su-callback received — code: ${code?.slice(0, 8)}... state: ${state?.slice(0, 8)}... (len: ${state?.length})`);
         if (!code || !state) {
           return res.status(400).send("Missing code or state from SearchUnify");
         }

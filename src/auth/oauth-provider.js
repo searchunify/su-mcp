@@ -72,6 +72,7 @@ class SUMcpOAuthProvider {
   async authorize(client, params, res) {
     // Store the OAuth session params in Redis so we can retrieve them after SU callback
     const sessionId = generateToken();
+    console.error(`[OAuth] authorize() — created sessionId: ${sessionId.slice(0, 8)}... clientId: ${client.client_id?.slice(0, 8)}...`);
     await this.store.saveOAuthSession(sessionId, {
       clientId: client.client_id,
       redirectUri: params.redirectUri,
@@ -79,6 +80,7 @@ class SUMcpOAuthProvider {
       state: params.state || "",
       scopes: params.scopes || [],
     });
+    console.error(`[OAuth] authorize() — session saved to Redis key: su-mcp:session:${sessionId.slice(0, 8)}...`);
 
     const basePath = new URL(this.mcpCallbackUrl).pathname.replace(/\/su-callback$/, "");
     const formHTML = getInstanceFormHTML({
@@ -98,7 +100,9 @@ class SUMcpOAuthProvider {
    * @param {string} uid - Search Client UID (used in search/analytics API calls)
    */
   async handleAuthorizeStart(sessionId, instanceUrl, suClientId, suClientSecret, uid) {
+    console.error(`[OAuth] handleAuthorizeStart() — sessionId: ${sessionId.slice(0, 8)}... instance: ${instanceUrl}`);
     const session = await this.store.getOAuthSession(sessionId);
+    console.error(`[OAuth] handleAuthorizeStart() — session lookup result: ${session ? "FOUND" : "NOT FOUND"}`);
     if (!session) {
       throw new Error("Invalid or expired session");
     }
@@ -126,7 +130,9 @@ class SUMcpOAuthProvider {
    * SU redirects here with ?code=SU_AUTH_CODE&state=SESSION_ID
    */
   async handleSuCallback(suAuthCode, sessionId) {
+    console.error(`[OAuth] handleSuCallback() — state/sessionId received: ${sessionId?.slice(0, 8)}... (len: ${sessionId?.length})`);
     const session = await this.store.getOAuthSession(sessionId);
+    console.error(`[OAuth] handleSuCallback() — session lookup result: ${session ? "FOUND" : "NOT FOUND"}`);
     if (!session) {
       throw new Error("Invalid or expired OAuth session");
     }
