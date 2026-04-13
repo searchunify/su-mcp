@@ -12,7 +12,7 @@ const reportTypes = {
   sessionListTable: "sessionListTable",
   /** POST /api/v2/content/tileDataContent — content-gap counts (failed/no-click/no-result, daily avgs) */
   tileDataContent: "tileDataContent",
-  /** POST /api/v2/overview/tileDataMetrics1 — visitors, searchUsers, uniqueUsersByDevice, email metrics only */
+  /** POST /api/v2/overview/tileDataMetrics1 — data.visitors is session count; searchUsers, uniqueUsersByDevice, email metrics */
   tileDataMetrics1: "tileDataMetrics1",
   /** POST /api/v2/overview/tileDataMetrics2 — searches, clicks, cases, withResult/withoutResult, uniqueSearches */
   tileDataMetrics2: "tileDataMetrics2",
@@ -22,12 +22,12 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
   const c = () => (getCreds ? getCreds() : creds);
   server.tool(
     "analytics",
-    "Analytics reports from SearchUnify. For headline/count questions: tileDataContent = content-gap metrics (failed searches, no-click, no-result, sessions, daily averages). tileDataMetrics1 = visitor/session metrics only (visitors, searchUsers, uniqueUsersByDevice, emptyEmailSessionCount, uniqueUsersByEmail). tileDataMetrics2 = search/click/conversion metrics (searches, withResult, withoutResult, uniqueSearches, clicks, clickedSessions, caseCount). Do not use tileDataMetrics1 for searches, clicks, cases, or with/without result — use tileDataMetrics2.",
+    "Analytics reports from SearchUnify. For headline/count questions: tileDataContent = content-gap metrics (failed searches, no-click, no-result, sessions, daily averages). tileDataMetrics1 = session/visitor tile: the API field `visitors` is the session count (also exposed as `sessionCount` in MCP output); plus searchUsers, uniqueUsersByDevice, emptyEmailSessionCount, uniqueUsersByEmail. Ignore undefined placeholders for click/search/case fields on this endpoint. tileDataMetrics2 = search/click/conversion metrics (searches, withResult, withoutResult, uniqueSearches, clicks, clickedSessions, caseCount). Do not use tileDataMetrics1 for searches, clicks, cases, or with/without result — use tileDataMetrics2.",
     {
     reportType: z
       .enum(Object.values(reportTypes))
       .describe(
-        "Which report to fetch. Tile APIs: tileDataContent (content gap); tileDataMetrics1 (visitors, search users, unique devices, email session counts); tileDataMetrics2 (search volume, results split, clicks, cases). Classification: searchQueryWith* / getAllSearchQuery. Conversion: getAllSearchConversion, averageClickPosition. Sessions: sessionDetails, sessionListTable."
+        "Which report to fetch. Tile APIs: tileDataContent (content gap); tileDataMetrics1 (visitors = session count, searchUsers, uniqueUsersByDevice, email metrics); tileDataMetrics2 (search volume, results split, clicks, cases). Classification: searchQueryWith* / getAllSearchQuery. Conversion: getAllSearchConversion, averageClickPosition. Sessions: sessionDetails, sessionListTable."
       ),
     startDate: z.string().describe("start date of the report"),
     endDate: z.string().describe("end date of the report"),
@@ -161,6 +161,19 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           endDate,
         };
         analyticsResponse = await Analytics.getTileDataMetrics1(tileParams);
+        // API `visitors` is session count; duplicate as sessionCount for model-facing clarity
+        {
+          const d = analyticsResponse?.data;
+          if (d && typeof d === "object" && !Array.isArray(d)) {
+            analyticsResponse = {
+              ...analyticsResponse,
+              data: {
+                ...d,
+                sessionCount: d.visitors,
+              },
+            };
+          }
+        }
         break;
       }
       case reportTypes.tileDataMetrics2: {
