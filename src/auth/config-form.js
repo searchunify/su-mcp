@@ -213,13 +213,20 @@ function getInstanceFormHTML({ formAction, sessionId }) {
     /* Blur / input listeners — real-time per-field feedback */
     fields.forEach(function (f) {
       var inp = document.getElementById(f.id);
+      /* Validate on blur — shows per-field error when user leaves the input */
       inp.addEventListener('blur', function () {
         var v = inp.value.trim();
         var msg = f.validate(v);
         if (msg) setErr(f, msg); else if (v) setOk(f);
       });
+      /* While typing — clear the error once they start correcting */
       inp.addEventListener('input', function () {
-        clrErr(f); inp.classList.remove('ok');
+        var v = inp.value.trim();
+        if (!v) { clrErr(f); inp.classList.remove('ok'); }
+        else {
+          var msg = f.validate(v);
+          if (msg) setErr(f, msg); else setOk(f);
+        }
         banner.textContent = ''; banner.classList.remove('on');
       });
     });
