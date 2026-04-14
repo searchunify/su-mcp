@@ -193,19 +193,15 @@ class RedisStore {
 
   // --- Access Tokens ---
   async saveAccessToken(token, data) {
-    const key = `access:${token}`;
-    await this._set(key, encryptPayload(data, "suTokens"), ACCESS_TOKEN_TTL);
-    // Immediately verify the write succeeded
-    const verify = await this._get(key);
-    console.error(`[Redis] saveAccessToken — key su-mcp:${key} write=${verify ? "OK" : "FAILED"}`);
+    await this._set(`access:${token}`, encryptPayload(data, "suTokens"), ACCESS_TOKEN_TTL);
   }
   async getAccessToken(token) {
     const d = await this._get(`access:${token}`);
-    if (!d) { console.error(`[Redis] getAccessToken — NOT FOUND for token: ${token?.slice(0,8)}...`); return null; }
+    if (!d) return null;
     try {
       return decryptPayload(d, true);
     } catch (err) {
-      console.error(`[Redis] getAccessToken — DECRYPT ERROR for token ${token?.slice(0,8)}...: ${err.message}`);
+      console.error(`[Redis] getAccessToken — decrypt error: ${err.message}`);
       return null;
     }
   }

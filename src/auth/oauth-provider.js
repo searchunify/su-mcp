@@ -323,9 +323,7 @@ class SUMcpOAuthProvider {
    * Verifies an access token and returns auth info.
    */
   async verifyAccessToken(token) {
-    console.error(`[OAuth] verifyAccessToken() — looking up token: ${token?.slice(0, 8)}...`);
     const tokenData = await this.store.getAccessToken(token);
-    console.error(`[OAuth] verifyAccessToken() — result: ${tokenData ? "FOUND" : "NOT FOUND"}`);
     if (!tokenData) {
       // Throw InvalidTokenError so SDK returns 401 (not 500) and mcp-remote can retry OAuth
       throw new InvalidTokenError("Invalid or expired access token");
