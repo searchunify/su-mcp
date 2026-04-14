@@ -267,41 +267,45 @@ async function runHttp(creds, port) {
   // Non-OAuth MCP endpoint — header-based auth (backward compatible)
   app.all("/mcp", express.json(), async (req, res) => {
     const ts = new Date().toISOString();
-    const method = req.method ?? "";
-    console.error(`[MCP HTTP] ${ts} ${method} /mcp (headers)`);
-    const requestCreds = getCredsFromHeaders(req.headers || {}) || creds;
-    const reqServer = createMcpServer();
-    const getCreds = () => httpCredsStorage.getStore() ?? requestCreds;
-    await initializeTools({ server: reqServer, creds: requestCreds, getCreds });
-    const reqTransport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-    await reqServer.connect(reqTransport);
-    await httpCredsStorage.run(requestCreds, async () => {
+    console.error(`[MCP HTTP] ${ts} ${req.method} /mcp (headers)`);
+    try {
+      const requestCreds = getCredsFromHeaders(req.headers || {}) || creds;
+      const reqServer = createMcpServer();
+      const getCreds = () => requestCreds;
+      await initializeTools({ server: reqServer, creds: requestCreds, getCreds });
+      const reqTransport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+      await reqServer.connect(reqTransport);
       await reqTransport.handleRequest(req, res, req.body);
-    });
-    res.on("close", () => {
-      reqTransport.close().catch(() => {});
-      reqServer.close().catch(() => {});
-    });
+      res.on("close", () => {
+        reqTransport.close().catch(() => {});
+        reqServer.close().catch(() => {});
+      });
+    } catch (err) {
+      console.error(`[MCP] headers handler error: ${err.message}`);
+      if (!res.headersSent) res.status(500).json({ error: "server_error", error_description: err.message });
+    }
   });
 
   // Legacy root endpoint for backward compatibility
   app.all("/", express.json(), async (req, res) => {
     const ts = new Date().toISOString();
-    const method = req.method ?? "";
-    console.error(`[MCP HTTP] ${ts} ${method} / (legacy)`);
-    const requestCreds = getCredsFromHeaders(req.headers || {}) || creds;
-    const reqServer = createMcpServer();
-    const getCreds = () => httpCredsStorage.getStore() ?? requestCreds;
-    await initializeTools({ server: reqServer, creds: requestCreds, getCreds });
-    const reqTransport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-    await reqServer.connect(reqTransport);
-    await httpCredsStorage.run(requestCreds, async () => {
+    console.error(`[MCP HTTP] ${ts} ${req.method} / (legacy)`);
+    try {
+      const requestCreds = getCredsFromHeaders(req.headers || {}) || creds;
+      const reqServer = createMcpServer();
+      const getCreds = () => requestCreds;
+      await initializeTools({ server: reqServer, creds: requestCreds, getCreds });
+      const reqTransport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+      await reqServer.connect(reqTransport);
       await reqTransport.handleRequest(req, res, req.body);
-    });
-    res.on("close", () => {
-      reqTransport.close().catch(() => {});
-      reqServer.close().catch(() => {});
-    });
+      res.on("close", () => {
+        reqTransport.close().catch(() => {});
+        reqServer.close().catch(() => {});
+      });
+    } catch (err) {
+      console.error(`[MCP] legacy handler error: ${err.message}`);
+      if (!res.headersSent) res.status(500).json({ error: "server_error", error_description: err.message });
+    }
   });
 
   app.listen(port, () => {

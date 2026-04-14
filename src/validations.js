@@ -58,7 +58,6 @@ const HEADER_PREFIX = 'searchunify-';
  * Header names (lowercase): searchunify-instance, searchunify-uid, searchunify-auth-type, searchunify-api-key, etc.
  */
 function getCredsFromHeaders(headers) {
-  console.log('getCredsFromHeaders headers', headers);
   const get = (k) => headers[HEADER_PREFIX + k];
   const instance = get('instance')?.trim();
   const uid = get('uid')?.trim();
