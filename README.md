@@ -658,7 +658,7 @@ su-mcp/
 - Added `tileDataContent`, `tileDataMetrics1`, `tileDataMetrics2` tile report types
 - Added `sessionId`, `pageNumber`, `startIndex`, `sortByField`, `sortType` parameters to analytics tool
 - Added local Node.js integration guide (Integration 2)
-- Updated `su-sdk` dependency to `2.1.1`
+- Updated `su-sdk` dependency to `2.1.0`
 - Improved `formatForClaude` to handle object and nested data responses
 
 ### v1.0.0
