@@ -22,7 +22,7 @@
     "@modelcontextprotocol/sdk": "^1.28.0",
     "express": "^5.2.1",
     "ioredis": "^5.10.1",
-    "su-sdk": "2.1.1",
+    "su-sdk": "2.1.0",
     "zod": "^3.24.3"
   },
   "devDependencies": {
