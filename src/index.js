@@ -158,47 +158,50 @@ async function runHttp(creds, port) {
     };
 
     // Instance form submission (POST — secrets in body, never in URL/logs)
+    // Returns JSON so the form can handle errors inline without navigating away.
+    // Success: { redirectUrl } — form JS does window.location.href = redirectUrl
+    // Error:   { error } — form JS shows the message on the same page (mcp-remote stays open at port 8033)
     app.post(`${basePath}/authorize/start`, requireStore, authRateLimit, express.urlencoded({ extended: false }), async (req, res) => {
       try {
         const { session, instance, uid, su_client_id, su_client_secret } = req.body;
         if (!session || !instance || !uid || !su_client_id || !su_client_secret) {
-          return res.status(400).send("Missing required fields");
+          return res.status(400).json({ error: "All fields are required." });
         }
 
         // Validate session exists in Redis (prevents forged session IDs)
         const existingSession = await oauthProvider.store.getOAuthSession(session);
         if (!existingSession) {
-          return res.status(400).send("Invalid or expired session. Please start over.");
+          return res.status(400).json({ error: "Session expired. Please restart the connection from Claude Desktop." });
         }
 
         // Validate instance URL format and require HTTPS in production
-        const instanceUrl = instance.trim();
+        const instanceUrl = instance.trim().replace(/\/+$/, "");
         let parsed;
         try {
           parsed = new URL(instanceUrl);
         } catch {
-          return res.status(400).send("Invalid instance URL");
+          return res.status(400).json({ error: "Enter a valid Instance URL, e.g. https://acme.searchunify.com" });
         }
         if (parsed.protocol !== "https:" && parsed.hostname !== "localhost" && parsed.hostname !== "127.0.0.1") {
-          return res.status(400).send("Instance URL must use HTTPS");
+          return res.status(400).json({ error: "Instance URL must use HTTPS." });
         }
-        // Block non-http(s) schemes and URLs with credentials
         if (!["https:", "http:"].includes(parsed.protocol) || parsed.username || parsed.password) {
-          return res.status(400).send("Invalid instance URL");
+          return res.status(400).json({ error: "Invalid Instance URL." });
         }
 
-        // Validate client_id, client_secret, and uid format (max 200 chars)
+        // Validate credential lengths
         if (su_client_id.length > 200 || su_client_secret.length > 200 || uid.trim().length > 200) {
-          return res.status(400).send("Invalid credentials format");
+          return res.status(400).json({ error: "One or more fields exceeds the maximum length." });
         }
 
         const suAuthorizeUrl = await oauthProvider.handleAuthorizeStart(
           session, instanceUrl, su_client_id.trim(), su_client_secret.trim(), uid.trim()
         );
-        res.redirect(302, suAuthorizeUrl);
+        // Return JSON — form JS follows the redirect in the same tab
+        return res.json({ redirectUrl: suAuthorizeUrl });
       } catch (err) {
         console.error("[OAuth] Authorize start error:", err.message);
-        res.status(400).send("Authorization failed. Please try again.");
+        return res.status(500).json({ error: "Authorization failed. Please try again." });
       }
     });
 
