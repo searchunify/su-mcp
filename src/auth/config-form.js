@@ -33,9 +33,8 @@ function getInstanceFormHTML({ formAction, sessionId }) {
     .card { background: #fff; border-radius: 14px; box-shadow: 0 4px 24px rgba(0,0,0,0.10); width: 100%; max-width: 420px; overflow: hidden; }
 
     /* ── Header ── */
-    .card-header { background: #1a1a2e; padding: 22px 28px 18px; text-align: center; }
-    
-    .card-header p { color: rgba(255,255,255,0.65); font-size: 13px; margin-top: 10px; line-height: 1.4; }
+    .card-header { background: #fff; border-bottom: 1px solid #f0f0f0; padding: 22px 28px 16px; text-align: center; }
+    .card-header p { color: #666; font-size: 13px; margin-top: 10px; line-height: 1.4; }
 
     /* ── Body ── */
     .card-body { padding: 18px 24px 22px; }
@@ -46,7 +45,7 @@ function getInstanceFormHTML({ formAction, sessionId }) {
 
     /* ── Form ── */
     .fg { margin-bottom: 12px; }
-    label { display: block; font-weight: 600; font-size: 11px; color: #555; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.3px; }
+    label { display: block; font-weight: 600; font-size: 13px; color: #333; margin-bottom: 4px; }
     label .req { color: #FF7300; margin-left: 1px; }
     input[type="url"], input[type="text"], input[type="password"] {
       width: 100%; padding: 9px 11px; border: 1.5px solid #e0e0e0; border-radius: 7px;
