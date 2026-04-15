@@ -100,7 +100,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     },
     async ({ searchString, aggregations }) => {
       const c = await credsForRequest();
-      if (!c) return { content: [{ type: "text", text: "Not authenticated. Please call the login tool first." }] };
+      if (!c) return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
       const Search = c.suRestClient.Search();
       const requestParams = { uid: c.config.uid, searchString };
       if (aggregations?.length) {
