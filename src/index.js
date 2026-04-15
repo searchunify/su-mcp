@@ -150,6 +150,33 @@ async function runHttp(creds, port) {
       });
     }
 
+    // Auto-registration guard: if the client_id on /authorize is unknown (e.g. Redis was
+    // flushed), re-register the client on the fly using the redirect_uri in the request so
+    // the OAuth flow proceeds normally instead of showing an "invalid_client" JSON error.
+    // Must be mounted BEFORE the SDK auth router so it runs first.
+    app.get(`${basePath}/authorize`, async (req, res, next) => {
+      const { client_id, redirect_uri } = req.query;
+      if (client_id && redirect_uri) {
+        try {
+          const existing = await oauthProvider.clientsStore.getClient(client_id);
+          if (!existing) {
+            console.error(`[OAuth] /authorize — unknown client ${client_id.slice(0, 8)}..., auto-registering with redirect_uri ${redirect_uri}`);
+            await oauthProvider.clientsStore.registerClient({
+              client_id,
+              redirect_uris: [redirect_uri],
+              client_name: "mcp-remote",
+              grant_types: ["authorization_code", "refresh_token"],
+              response_types: ["code"],
+              token_endpoint_auth_method: "none",
+            });
+          }
+        } catch (err) {
+          console.error(`[OAuth] /authorize auto-registration error: ${err.message}`);
+        }
+      }
+      next();
+    });
+
     // Mount the SDK's OAuth auth router (handles /authorize, /token, /register, /.well-known/*)
     // Uses basePath so endpoints are accessible behind a reverse proxy (e.g., /7777/authorize)
     app.use(basePath, mcpAuthRouter({
