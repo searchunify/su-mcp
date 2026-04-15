@@ -244,9 +244,9 @@ async function runHttp(creds, port) {
           return res.status(200).type("html").send(loginSuccessHTML());
         }
 
-        // Standard OAuth flow: show success page, then JS-redirect to Claude Desktop's callback
+        // Standard OAuth flow: 302 redirect directly to Claude Desktop's localhost callback
         const redirectUrl = await oauthProvider.handleSuCallback(code, state);
-        res.status(200).type("html").send(loginSuccessHTML(redirectUrl));
+        res.redirect(302, redirectUrl);
       } catch (err) {
         console.error("[OAuth] SU callback error:", err.message);
         // Don't leak internal error details to the user
