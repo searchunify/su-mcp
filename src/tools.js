@@ -12,15 +12,20 @@ export const initializeTools = async ({ server, creds, getCreds, mcpSessionId, o
       "login",
       "Log in to your SearchUnify instance. Call this before using any other tool. Returns a link — click it to open the login form in your browser, then come back and continue.",
       {},
-      async () => ({
-        content: [{
-          type: "text",
-          text:
-            `Click the link below to connect your SearchUnify instance:\n\n` +
-            `[Connect SearchUnify](${base}/mcp-connect/login?s=${encodeURIComponent(mcpSessionId)})\n\n` +
-            `After completing login in your browser, let me know and I will continue with your request.`,
-        }],
-      })
+      async () => {
+        const loginUrl = `${base}/mcp-connect/login?s=${encodeURIComponent(mcpSessionId)}`;
+        return {
+          content: [{
+            type: "text",
+            text:
+              `Please present this login link to the user so they can connect their SearchUnify instance:\n\n` +
+              `[Connect SearchUnify](${loginUrl})\n\n` +
+              `If your client supports clickable links, render the markdown above. ` +
+              `Otherwise show the plain URL so the user can copy it: ${loginUrl}\n\n` +
+              `After the user completes login in their browser, let them know you are ready to continue.`,
+          }],
+        };
+      }
     );
   }
 };
