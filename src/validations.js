@@ -40,7 +40,7 @@ const validateCreds = () => {
   if(!config.uid){
     throw new Error('Invalid parameter: uid is required in the config file.');
   }
-  const restClientConfig = { ...config };
+  const restClientConfig = { ...config, sendMcpConsumptionTrack: true };
   delete restClientConfig.uid;
   // instance: platform base URL (e.g. https://host); su-sdk appends /api/v2/... from ANALYTICS.* — duplicate /api/v2 on instance is normalized away in SearchUnifyRestClient
   const suRestClient = new SearchUnifyRestClient(restClientConfig);
@@ -95,7 +95,7 @@ function getCredsFromHeaders(headers) {
     return null;
   }
 
-  const restClientConfig = { ...config };
+  const restClientConfig = { ...config, sendMcpConsumptionTrack: true };
   delete restClientConfig.uid;
   // instance: platform base URL; su-sdk appends /api/v2/... (SearchUnifyRestClient strips duplicate trailing /api/v2)
   const suRestClient = new SearchUnifyRestClient(restClientConfig);
