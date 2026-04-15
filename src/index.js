@@ -280,37 +280,13 @@ h1{color:#16a34a;font-size:20px;margin-bottom:12px}p{color:#555;font-size:14px;l
         if (!res.headersSent) res.status(500).json({ error: "server_error", error_description: err.message });
       }
     });
-  }
 
-  // Non-OAuth MCP endpoint — header-based auth (backward compatible)
-  app.all("/mcp", express.json(), async (req, res) => {
-    const ts = new Date().toISOString();
-    console.error(`[MCP HTTP] ${ts} ${req.method} /mcp (headers)`);
-    try {
-      const requestCreds = getCredsFromHeaders(req.headers || {}) || creds;
-      const reqServer = createMcpServer();
-      const getCreds = () => requestCreds;
-      await initializeTools({ server: reqServer, creds: requestCreds, getCreds });
-      const reqTransport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-      await reqServer.connect(reqTransport);
-      await reqTransport.handleRequest(req, res, req.body);
-      res.on("close", () => {
-        reqTransport.close().catch(() => {});
-        reqServer.close().catch(() => {});
-      });
-    } catch (err) {
-      console.error(`[MCP] headers handler error: ${err.message}`);
-      if (!res.headersSent) res.status(500).json({ error: "server_error", error_description: err.message });
-    }
-  });
+    // ── Tool-based login flow (/mcp-connect) ──────────────────────────────────
+    // Alternative to the OAuth browser flow. Claude Desktop connects here without
+    // OAuth — no browser opens. The login() MCP tool returns a link to the config
+    // form; the user fills it, logs in on SU, and SU tokens are stored by MCP
+    // session ID for all subsequent tool calls.
 
-  // ── Tool-based login flow (/mcp-connect) ────────────────────────────────────
-  // Alternative to the OAuth browser flow. Claude Desktop connects here without
-  // OAuth — no browser opens. The login() MCP tool returns a link to the config
-  // form; the user fills it, logs in on SU, and SU tokens are stored by MCP
-  // session ID for all subsequent tool calls.
-
-  if (oauthEnabled && oauthProvider) {
     // Per-session state: mcpSessionId → { server, transport, createdAt }
     const mcpConnectSessions = new Map();
 
@@ -420,6 +396,28 @@ h1{color:#16a34a;font-size:20px;margin-bottom:12px}p{color:#555;font-size:14px;l
       }
     });
   }
+
+  // Non-OAuth MCP endpoint — header-based auth (backward compatible)
+  app.all("/mcp", express.json(), async (req, res) => {
+    const ts = new Date().toISOString();
+    console.error(`[MCP HTTP] ${ts} ${req.method} /mcp (headers)`);
+    try {
+      const requestCreds = getCredsFromHeaders(req.headers || {}) || creds;
+      const reqServer = createMcpServer();
+      const getCreds = () => requestCreds;
+      await initializeTools({ server: reqServer, creds: requestCreds, getCreds });
+      const reqTransport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+      await reqServer.connect(reqTransport);
+      await reqTransport.handleRequest(req, res, req.body);
+      res.on("close", () => {
+        reqTransport.close().catch(() => {});
+        reqServer.close().catch(() => {});
+      });
+    } catch (err) {
+      console.error(`[MCP] headers handler error: ${err.message}`);
+      if (!res.headersSent) res.status(500).json({ error: "server_error", error_description: err.message });
+    }
+  });
 
   // Legacy root endpoint for backward compatibility
   app.all("/", express.json(), async (req, res) => {
