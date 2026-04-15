@@ -10,7 +10,7 @@ By leveraging [su-sdk-js](https://www.npmjs.com/package/su-sdk), this server exp
 - **LLM-Integrated Enterprise Search** -- Power GenAI tools like Claude with context-aware, enterprise-grade search from SearchUnify, enabling more relevant, trusted, and explainable responses.
 - **Search Analytics** -- Retrieve analytics reports (top queries, zero-result queries, conversion data, and more) directly through AI assistants.
 - **Faceted Filtering** -- Discover and apply facet/filter options to narrow search results by category, source, index, and other dimensions.
-- **Multiple Authentication Methods** -- Supports API Key, OAuth 2.0 Password Grant, and Client Credentials Grant for flexible, enterprise-grade security.
+- **Multiple Authentication Methods** -- Supports API Key, OAuth 2.0 Password Grant, Client Credentials Grant, and tool-based login (link-in-chat) for flexible, enterprise-grade security.
 - **Dual Transport** -- Runs over **stdio** (for local tools like Claude Desktop) or **HTTP** (Streamable HTTP for remote/cloud clients), or both simultaneously.
 - **Plug-and-Play Deployment** -- Docker-based setup for rapid configuration, portability, and scalability across environments.
 
@@ -18,7 +18,7 @@ By leveraging [su-sdk-js](https://www.npmjs.com/package/su-sdk), this server exp
 
 ## Tools
 
-The MCP server exposes **4 tools** that AI assistants can invoke:
+The MCP server exposes **5 tools** that AI assistants can invoke:
 
 ### 1. `search`
 
@@ -47,7 +47,27 @@ Performs a search query against your SearchUnify instance and returns relevant r
 
 ---
 
-### 2. `get-filter-options`
+### 2. `login`
+
+> **Only available on the `/mcp-connect` endpoint.** Not present on the standard OAuth or header-based endpoints.
+
+Initiates the tool-based login flow for environments where the browser cannot auto-open (e.g. some Claude Desktop setups). Returns a clickable link to the SearchUnify connection form. The user opens the link manually, fills in their instance details, and logs in — after which all other tools become available.
+
+No parameters required.
+
+**Returns:** A markdown link to the connection form, e.g.:
+
+```
+Click the link below to connect your SearchUnify instance:
+
+[Connect SearchUnify](https://mcp.searchunify.com/mcp-connect/login?s=<session_id>)
+
+After completing login in your browser, let me know and I will continue with your request.
+```
+
+---
+
+### 3. `get-filter-options`
 
 Retrieves available filter/facet options for a search query. Use this tool first to discover what filters are available, then pass the desired filters into the `search` tool.
 
@@ -67,7 +87,7 @@ Retrieves available filter/facet options for a search query. Use this tool first
 
 ---
 
-### 3. `analytics`
+### 4. `analytics`
 
 Retrieves analytics reports from SearchUnify.
 
@@ -92,7 +112,7 @@ Retrieves analytics reports from SearchUnify.
 
 ---
 
-### 4. `get-search-clients`
+### 5. `get-search-clients`
 
 Lists all search clients configured in the SearchUnify instance. Returns minimal information for each search client. No parameters required -- the tenant is derived from the authentication credentials.
 
@@ -511,6 +531,49 @@ When a user connects via Claude's directory:
 
 ---
 
+### Integration 5: Tool-Based Login via `/mcp-connect` (No Browser Required)
+
+Use this integration when Claude Desktop **cannot auto-open a browser** to complete the OAuth flow (e.g. headless or restricted environments). Instead of opening a browser automatically, Claude surfaces a link in the chat — the user clicks it manually to open the connection form.
+
+**How it works:**
+```
+Claude Desktop → connects to /mcp-connect (no OAuth, no browser)
+→ Claude calls login() tool
+→ Chat shows: [Connect SearchUnify](https://mcp.searchunify.com/mcp-connect/login?s=...)
+→ User clicks link → same connection form (instance URL, OAuth Client ID, Secret)
+→ User logs in on their SearchUnify instance (SSO supported)
+→ "Login Successful" page → user returns to Claude
+→ All tools work normally
+```
+
+#### Prerequisites
+
+- Same as Integration 4: an OAuth client must be registered in your SearchUnify Admin with redirect URI `<MCP_ISSUER_URL>/su-callback` (e.g. `https://mcp.searchunify.com/su-callback`).
+- The MCP server must have `OAUTH_ENCRYPTION_KEY` and `MCP_ISSUER_URL` set.
+
+#### Claude Desktop Configuration
+
+```json
+{
+  "mcpServers": {
+    "su-mcp": {
+      "type": "http",
+      "url": "https://mcp.searchunify.com/mcp-connect"
+    }
+  }
+}
+```
+
+> **Note:** Use `/mcp-connect` instead of `/6565/mcp` or `/7777/mcp`. The server assigns a session ID automatically — no OAuth browser flow is triggered.
+
+#### Usage
+
+On first use, Claude will automatically call the `login` tool and display the connection link. Click it, fill in the form (instance URL, OAuth Client ID, OAuth Client Secret), log in, and return to Claude. All tools are then available for the duration of the session (1 hour).
+
+If the session expires, call the `login` tool again to reconnect.
+
+---
+
 ## Usage Examples
 
 Here are some example prompts you can use with Claude after connecting SearchUnify:
@@ -637,6 +700,13 @@ su-mcp/
 ---
 
 ## Changelog
+
+### v1.3.0
+- Added `/mcp-connect` endpoint — tool-based login for environments where Claude Desktop cannot auto-open a browser
+- Added `login` MCP tool (only on `/mcp-connect`): returns a link to the connection form in chat; user opens it manually, logs in via SU (SSO supported), and receives a "Login Successful" page
+- SU tokens stored by MCP session ID after tool-based login; all other tools work normally post-auth
+- Sessions persist for 1 hour; expired sessions prompt the user to call `login` again
+- Existing OAuth flow (`/6565/mcp`, `/7777/mcp`) and all other integrations are unchanged
 
 ### v1.2.0
 - Added OAuth 2.0 proxy flow for Claude public directory listing (PKCE, Dynamic Client Registration)
