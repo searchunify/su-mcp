@@ -358,7 +358,11 @@ class SUMcpOAuthProvider {
     console.error(`[OAuth] exchangeRefreshToken() — client: ${client.client_id?.slice(0, 8)}... token: ${refreshToken?.slice(0, 8)}...`);
     const refreshData = await this.store.getRefreshToken(refreshToken);
     if (!refreshData) {
-      console.error(`[OAuth] exchangeRefreshToken() — refresh token NOT FOUND (expired or already rotated)`);
+      // Refresh token expired — delete the client registration so mcp-remote is forced to
+      // re-register as a completely fresh client on the next OAuth attempt. This resets
+      // mcp-remote's internal token state and prevents the "both expired" re-auth loop.
+      console.error(`[OAuth] exchangeRefreshToken() — refresh token NOT FOUND (expired). Revoking client ${client.client_id?.slice(0, 8)}... to force clean re-auth.`);
+      await this.store.deleteClient(client.client_id);
       throw new Error("Invalid or expired refresh token");
     }
 

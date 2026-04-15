@@ -107,6 +107,7 @@ class MemoryStore {
   // --- OAuth Client Registration ---
   async saveClient(client) { this._set(`client:${client.client_id}`, encryptPayload(client, "_none"), CLIENT_TTL); }
   async getClient(clientId) { const d = this._get(`client:${clientId}`); return d ? { ...d } : undefined; }
+  async deleteClient(clientId) { this._del(`client:${clientId}`); }
 
   // --- OAuth Sessions ---
   async saveOAuthSession(sessionId, data) { this._set(`session:${sessionId}`, encryptPayload(data, "suClientSecret"), OAUTH_SESSION_TTL); }
@@ -185,6 +186,7 @@ class RedisStore {
   // --- OAuth Client Registration ---
   async saveClient(client) { await this._set(`client:${client.client_id}`, client, CLIENT_TTL); }
   async getClient(clientId) { return (await this._get(`client:${clientId}`)) ?? undefined; }
+  async deleteClient(clientId) { await this._del(`client:${clientId}`); }
 
   // --- OAuth Sessions ---
   async saveOAuthSession(sessionId, data) { await this._set(`session:${sessionId}`, encryptPayload(data, "suClientSecret"), OAUTH_SESSION_TTL); }
