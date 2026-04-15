@@ -7,7 +7,7 @@ const aggregationSchema = z.object({
 });
 
 const initializeSearchTools = async ({ server, creds, getCreds }) => {
-  const credsForRequest = () => (getCreds ? getCreds() : creds);
+  const credsForRequest = async () => (getCreds ? await getCreds() : creds);
   server.tool("search", "Get relevant search results for a search query using SearchUnify. Optionally pass aggregations (facets) from get-filter-options to filter results.", {
     searchString: z.string().min(3).max(100).describe("search query, its a string can be a single word or a sentence"),
     aggregations: z.array(aggregationSchema).optional().describe("optional list of facet filters (e.g. from get-filter-options) to narrow results by category, source, etc."),
@@ -21,7 +21,8 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     destructiveHint: false,
     openWorldHint: true,
   }, async ({ searchString, aggregations, page, pageSize, sortBy, versionResults }) => {
-    const c = credsForRequest();
+    const c = await credsForRequest();
+    if (!c) return { content: [{ type: "text", text: "Not authenticated. Please call the login tool first." }] };
     const Search = c.suRestClient.Search();
     //const requestParams = { uid: c.config.uid, searchString };
     
@@ -98,7 +99,8 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       openWorldHint: true,
     },
     async ({ searchString, aggregations }) => {
-      const c = credsForRequest();
+      const c = await credsForRequest();
+      if (!c) return { content: [{ type: "text", text: "Not authenticated. Please call the login tool first." }] };
       const Search = c.suRestClient.Search();
       const requestParams = { uid: c.config.uid, searchString };
       if (aggregations?.length) {

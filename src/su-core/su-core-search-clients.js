@@ -1,7 +1,7 @@
 import { formatForClaude } from "./../utils.js";
 
 const initializeSearchClientsTools = async ({ server, creds, getCreds }) => {
-  const credsForRequest = () => (getCreds ? getCreds() : creds);
+  const credsForRequest = async () => (getCreds ? await getCreds() : creds);
 
   server.tool(
     "get-search-clients",
@@ -13,7 +13,8 @@ const initializeSearchClientsTools = async ({ server, creds, getCreds }) => {
       openWorldHint: true,
     },
     async () => {
-      const c = credsForRequest();
+      const c = await credsForRequest();
+      if (!c) return { content: [{ type: "text", text: "Not authenticated. Please call the login tool first." }] };
       const SearchClients = c.suRestClient.SearchClients();
       const response = await SearchClients.getSearchClients();
 
