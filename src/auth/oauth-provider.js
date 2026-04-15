@@ -355,8 +355,10 @@ class SUMcpOAuthProvider {
    * Exchanges a refresh token for a new access token.
    */
   async exchangeRefreshToken(client, refreshToken, scopes) {
+    console.error(`[OAuth] exchangeRefreshToken() — client: ${client.client_id?.slice(0, 8)}... token: ${refreshToken?.slice(0, 8)}...`);
     const refreshData = await this.store.getRefreshToken(refreshToken);
     if (!refreshData) {
+      console.error(`[OAuth] exchangeRefreshToken() — refresh token NOT FOUND (expired or already rotated)`);
       throw new Error("Invalid or expired refresh token");
     }
 
@@ -379,6 +381,7 @@ class SUMcpOAuthProvider {
       suTokens: refreshData.suTokens,
     });
 
+    console.error(`[OAuth] exchangeRefreshToken() — new access token: ${accessToken.slice(0, 8)}... new refresh token: ${newRefreshToken.slice(0, 8)}... (old refresh token rotated)`);
     return {
       access_token: accessToken,
       token_type: "bearer",
