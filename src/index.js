@@ -316,11 +316,14 @@ async function runHttp(creds, port) {
     }, 30 * 60 * 1000);
 
     // GET /mcp-connect/login — serve the config form
+    // Re-seeds the OAuth session on every visit so a Redis wipe doesn't break re-authentication.
     app.get("/mcp-connect/login", requireStore, async (req, res) => {
       const mcpSessionId = req.query.s;
       if (!mcpSessionId || typeof mcpSessionId !== "string" || mcpSessionId.length > 128) {
         return res.status(400).send("Invalid or missing session parameter.");
       }
+      // Re-seed the OAuth session so the form submission works even after a Redis flush
+      await oauthProvider.store.saveOAuthSession(mcpSessionId, { mcpSessionId });
       const { getInstanceFormHTML } = await import("./auth/config-form.js");
       res.status(200).type("html").send(
         getInstanceFormHTML({ formAction: "/mcp-connect/authorize/start", sessionId: mcpSessionId })
