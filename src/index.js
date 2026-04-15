@@ -53,6 +53,25 @@ async function runStdio(creds) {
 
 const httpCredsStorage = new AsyncLocalStorage();
 
+/**
+ * Returns the "Login Successful" HTML page shown after SU authentication.
+ * If redirectUrl is provided, the page auto-redirects there after 1 second
+ * (used by the standard OAuth flow to complete Claude Desktop's callback).
+ * Without redirectUrl (tool-based flow), the user just sees the confirmation.
+ */
+function loginSuccessHTML(redirectUrl) {
+  const redirect = redirectUrl
+    ? `<script>setTimeout(()=>{window.location.href=${JSON.stringify(redirectUrl)};},1000);</script>`
+    : "";
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Login Successful</title>
+<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f5f7fa;margin:0}
+.card{background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.08);padding:40px;max-width:420px;text-align:center}
+h1{color:#16a34a;font-size:20px;margin-bottom:12px}p{color:#555;font-size:14px;line-height:1.5}</style></head>
+<body><div class="card"><h1>&#10003; Login Successful</h1>
+<p>You have been connected to SearchUnify.<br>Return to Claude and continue your conversation.</p></div>${redirect}</body></html>`;
+}
+
 async function runHttp(creds, port) {
   const server = createMcpServer();
   const getCreds = () => httpCredsStorage.getStore() ?? creds;
@@ -222,18 +241,12 @@ async function runHttp(creds, port) {
         // Tool-based login flow (mcp-connect): store tokens by MCP session ID, show success page
         const isToolSession = await oauthProvider.handleSuCallbackForTool(code, state);
         if (isToolSession) {
-          return res.status(200).type("html").send(`<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Login Successful</title>
-<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f5f7fa;margin:0}
-.card{background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.08);padding:40px;max-width:420px;text-align:center}
-h1{color:#16a34a;font-size:20px;margin-bottom:12px}p{color:#555;font-size:14px;line-height:1.5}</style></head>
-<body><div class="card"><h1>&#10003; Login Successful</h1>
-<p>You have been connected to SearchUnify.<br>Return to Claude and continue your conversation.</p></div></body></html>`);
+          return res.status(200).type("html").send(loginSuccessHTML());
         }
 
-        // Standard OAuth flow: redirect back to Claude Desktop's callback
+        // Standard OAuth flow: show success page, then JS-redirect to Claude Desktop's callback
         const redirectUrl = await oauthProvider.handleSuCallback(code, state);
-        res.redirect(302, redirectUrl);
+        res.status(200).type("html").send(loginSuccessHTML(redirectUrl));
       } catch (err) {
         console.error("[OAuth] SU callback error:", err.message);
         // Don't leak internal error details to the user
