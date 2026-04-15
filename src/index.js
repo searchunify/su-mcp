@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import express from "express";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -217,6 +218,20 @@ async function runHttp(creds, port) {
         if (typeof code !== "string" || code.length > 256 || typeof state !== "string" || state.length > 256) {
           return res.status(400).send("Invalid callback parameters");
         }
+
+        // Tool-based login flow (mcp-connect): store tokens by MCP session ID, show success page
+        const isToolSession = await oauthProvider.handleSuCallbackForTool(code, state);
+        if (isToolSession) {
+          return res.status(200).type("html").send(`<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Login Successful</title>
+<style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f5f7fa;margin:0}
+.card{background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.08);padding:40px;max-width:420px;text-align:center}
+h1{color:#16a34a;font-size:20px;margin-bottom:12px}p{color:#555;font-size:14px;line-height:1.5}</style></head>
+<body><div class="card"><h1>&#10003; Login Successful</h1>
+<p>You have been connected to SearchUnify.<br>Return to Claude and continue your conversation.</p></div></body></html>`);
+        }
+
+        // Standard OAuth flow: redirect back to Claude Desktop's callback
         const redirectUrl = await oauthProvider.handleSuCallback(code, state);
         res.redirect(302, redirectUrl);
       } catch (err) {
@@ -289,6 +304,123 @@ async function runHttp(creds, port) {
     }
   });
 
+  // ── Tool-based login flow (/mcp-connect) ────────────────────────────────────
+  // Alternative to the OAuth browser flow. Claude Desktop connects here without
+  // OAuth — no browser opens. The login() MCP tool returns a link to the config
+  // form; the user fills it, logs in on SU, and SU tokens are stored by MCP
+  // session ID for all subsequent tool calls.
+
+  if (oauthEnabled && oauthProvider) {
+    // Per-session state: mcpSessionId → { server, transport, createdAt }
+    const mcpConnectSessions = new Map();
+
+    // Evict sessions older than 2 hours every 30 minutes
+    setInterval(() => {
+      const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+      for (const [id, s] of mcpConnectSessions) {
+        if (s.createdAt < cutoff) {
+          s.transport.close().catch(() => {});
+          s.server.close().catch(() => {});
+          mcpConnectSessions.delete(id);
+        }
+      }
+    }, 30 * 60 * 1000);
+
+    // GET /mcp-connect/login — serve the config form
+    app.get("/mcp-connect/login", requireStore, async (req, res) => {
+      const mcpSessionId = req.query.s;
+      if (!mcpSessionId || typeof mcpSessionId !== "string" || mcpSessionId.length > 128) {
+        return res.status(400).send("Invalid or missing session parameter.");
+      }
+      const { getInstanceFormHTML } = await import("./auth/config-form.js");
+      res.status(200).type("html").send(
+        getInstanceFormHTML({ formAction: "/mcp-connect/authorize/start", sessionId: mcpSessionId })
+      );
+    });
+
+    // POST /mcp-connect/authorize/start — handle config form submission
+    app.post("/mcp-connect/authorize/start", requireStore, authRateLimit, express.urlencoded({ extended: false }), async (req, res) => {
+      try {
+        const { session, instance, uid, su_client_id, su_client_secret } = req.body;
+        if (!session || !instance || !uid || !su_client_id || !su_client_secret) {
+          return res.status(400).json({ error: "All fields are required." });
+        }
+
+        const existingSession = await oauthProvider.store.getOAuthSession(session);
+        if (!existingSession) {
+          return res.status(400).json({ error: "Session expired. Please call the login tool again in Claude." });
+        }
+
+        const instanceUrl = instance.trim().replace(/\/+$/, "");
+        let parsed;
+        try { parsed = new URL(instanceUrl); } catch {
+          return res.status(400).json({ error: "Enter a valid Instance URL, e.g. https://acme.searchunify.com" });
+        }
+        if (parsed.protocol !== "https:" && parsed.hostname !== "localhost" && parsed.hostname !== "127.0.0.1") {
+          return res.status(400).json({ error: "Instance URL must use HTTPS." });
+        }
+        if (parsed.username || parsed.password) {
+          return res.status(400).json({ error: "Invalid Instance URL." });
+        }
+        if (su_client_id.length > 200 || su_client_secret.length > 200 || uid.trim().length > 200) {
+          return res.status(400).json({ error: "One or more fields exceeds the maximum length." });
+        }
+
+        const suAuthorizeUrl = await oauthProvider.handleAuthorizeStartForTool(
+          session, instanceUrl, su_client_id.trim(), su_client_secret.trim(), uid.trim()
+        );
+        return res.json({ redirectUrl: suAuthorizeUrl });
+      } catch (err) {
+        console.error("[mcp-connect] Authorize start error:", err.message);
+        return res.status(500).json({ error: "Authorization failed. Please try again." });
+      }
+    });
+
+    // MCP endpoint — stateful, no OAuth middleware
+    app.all("/mcp-connect", express.json(), async (req, res) => {
+      const ts = new Date().toISOString();
+      console.error(`[MCP HTTP] ${ts} ${req.method} /mcp-connect (tool-auth)`);
+
+      try {
+        const existingId = req.headers["mcp-session-id"];
+
+        // Reuse existing session
+        if (existingId && mcpConnectSessions.has(existingId)) {
+          const { transport } = mcpConnectSessions.get(existingId);
+          await transport.handleRequest(req, res, req.body);
+          return;
+        }
+
+        // New session — assign a stable session ID
+        const mcpSessionId = crypto.randomBytes(16).toString("hex");
+
+        // Seed an OAuth session in the store so the login route can look it up
+        await oauthProvider.store.saveOAuthSession(mcpSessionId, { mcpSessionId });
+
+        // getCreds is called per-request by tool handlers; picks up tokens after login
+        const getCreds = async () => {
+          const suTokens = await oauthProvider.getSuTokensForToolSession(mcpSessionId);
+          return suTokens ? buildCredsFromSuToken(suTokens) : null;
+        };
+
+        const reqServer = createMcpServer();
+        await initializeTools({ server: reqServer, creds: null, getCreds, mcpSessionId, oauthProvider });
+
+        const reqTransport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => mcpSessionId,
+        });
+
+        mcpConnectSessions.set(mcpSessionId, { server: reqServer, transport: reqTransport, createdAt: Date.now() });
+
+        await reqServer.connect(reqTransport);
+        await reqTransport.handleRequest(req, res, req.body);
+      } catch (err) {
+        console.error(`[mcp-connect] handler error: ${err.message}`);
+        if (!res.headersSent) res.status(500).json({ error: "server_error", error_description: err.message });
+      }
+    });
+  }
+
   // Legacy root endpoint for backward compatibility
   app.all("/", express.json(), async (req, res) => {
     const ts = new Date().toISOString();
@@ -319,6 +451,9 @@ async function runHttp(creds, port) {
       console.error(`  Instance form → /authorize/start → SU login → /su-callback`);
     }
     console.error(`  MCP endpoint: /mcp`);
+    if (oauthEnabled) {
+      console.error(`  Tool-auth endpoint: /mcp-connect (no OAuth — login tool returns form link)`);
+    }
   });
 }
 

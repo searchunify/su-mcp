@@ -127,6 +127,11 @@ class MemoryStore {
   async saveRefreshToken(token, data) { this._set(`refresh:${token}`, encryptPayload(data, "suTokens"), REFRESH_TOKEN_TTL); }
   async getRefreshToken(token) { const d = this._get(`refresh:${token}`); return d ? decryptPayload({ ...d }, true) : null; }
   async deleteRefreshToken(token) { this._del(`refresh:${token}`); }
+
+  // --- Tool Sessions (mcp-connect flow) ---
+  async saveToolSession(sessionId, data) { this._set(`toolsession:${sessionId}`, encryptPayload(data, "suTokens"), ACCESS_TOKEN_TTL); }
+  async getToolSession(sessionId) { const d = this._get(`toolsession:${sessionId}`); return d ? decryptPayload({ ...d }, true) : null; }
+  async deleteToolSession(sessionId) { this._del(`toolsession:${sessionId}`); }
 }
 
 // =====================================================================
@@ -211,6 +216,11 @@ class RedisStore {
   async saveRefreshToken(token, data) { await this._set(`refresh:${token}`, encryptPayload(data, "suTokens"), REFRESH_TOKEN_TTL); }
   async getRefreshToken(token) { const d = await this._get(`refresh:${token}`); return d ? decryptPayload(d, true) : null; }
   async deleteRefreshToken(token) { await this._del(`refresh:${token}`); }
+
+  // --- Tool Sessions (mcp-connect flow) ---
+  async saveToolSession(sessionId, data) { await this._set(`toolsession:${sessionId}`, encryptPayload(data, "suTokens"), ACCESS_TOKEN_TTL); }
+  async getToolSession(sessionId) { const d = await this._get(`toolsession:${sessionId}`); return d ? decryptPayload(d, true) : null; }
+  async deleteToolSession(sessionId) { await this._del(`toolsession:${sessionId}`); }
 }
 
 // =====================================================================

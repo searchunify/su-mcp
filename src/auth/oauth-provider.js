@@ -127,6 +127,74 @@ class SUMcpOAuthProvider {
   }
 
   /**
+   * Handles the instance URL form submission for the tool-based login flow (/mcp-connect).
+   * Same as handleAuthorizeStart but stores mcpSessionId in the OAuth session so
+   * /su-callback can correlate the completed login back to the right MCP session.
+   * @param {string} mcpSessionId - The MCP session ID assigned by the /mcp-connect transport
+   * @param {string} instanceUrl - SU instance URL
+   * @param {string} suClientId - SU OAuth client ID
+   * @param {string} suClientSecret - SU OAuth client secret
+   * @param {string} uid - SU user ID
+   */
+  async handleAuthorizeStartForTool(mcpSessionId, instanceUrl, suClientId, suClientSecret, uid) {
+    // For the tool flow the OAuth session is keyed by mcpSessionId (set up by the login route)
+    const session = await this.store.getOAuthSession(mcpSessionId);
+    if (!session) {
+      throw new Error("Invalid or expired session");
+    }
+
+    session.instanceUrl = instanceUrl.replace(/\/$/, "");
+    session.suClientId = suClientId;
+    session.suClientSecret = suClientSecret;
+    session.uid = uid;
+    session.mcpSessionId = mcpSessionId;
+    await this.store.saveOAuthSession(mcpSessionId, session);
+
+    const suAuthorizeUrl = `${session.instanceUrl}/auth/authorise_redirect`
+      + `?client_id=${encodeURIComponent(suClientId)}`
+      + `&redirect_uri=${encodeURIComponent(this.mcpCallbackUrl)}`
+      + `&state=${encodeURIComponent(mcpSessionId)}`;
+
+    return suAuthorizeUrl;
+  }
+
+  /**
+   * Returns SU tokens for a tool-based login session (mcp-connect flow).
+   */
+  async getSuTokensForToolSession(mcpSessionId) {
+    return this.store.getToolSession(mcpSessionId);
+  }
+
+  /**
+   * Handles the SU callback for the tool-based login flow.
+   * Exchanges the SU auth code for SU tokens and stores them by MCP session ID.
+   * Returns true if this was a tool-session callback, false otherwise (caller falls
+   * through to the standard OAuth flow).
+   */
+  async handleSuCallbackForTool(suAuthCode, sessionId) {
+    const session = await this.store.getOAuthSession(sessionId);
+    if (!session?.mcpSessionId) {
+      return false; // not a tool-session callback
+    }
+
+    const suTokens = await this._exchangeSuCode(
+      session.instanceUrl, suAuthCode, session.suClientId, session.suClientSecret
+    );
+
+    await this.store.saveToolSession(session.mcpSessionId, {
+      accessToken: suTokens.access_token || suTokens.accessToken,
+      refreshToken: suTokens.refresh_token || suTokens.refreshToken,
+      instanceUrl: session.instanceUrl,
+      suClientId: session.suClientId,
+      suClientSecret: session.suClientSecret,
+      uid: session.uid,
+    });
+
+    await this.store.deleteOAuthSession(sessionId);
+    return true;
+  }
+
+  /**
    * Handles the callback from SU's /authorise_redirect.
    * SU redirects here with ?code=SU_AUTH_CODE&state=SESSION_ID
    */
