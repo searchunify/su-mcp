@@ -557,8 +557,11 @@ Claude Desktop → connects to /mcp-connect (no OAuth, no browser)
 {
   "mcpServers": {
     "su-mcp": {
-      "type": "http",
-      "url": "https://mcp.searchunify.com/mcp-connect"
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.searchunify.com/mcp-connect"
+      ]
     }
   }
 }
