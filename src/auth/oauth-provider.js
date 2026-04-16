@@ -304,10 +304,13 @@ class SUMcpOAuthProvider {
    * Returns the stored code_challenge for a given authorization code.
    */
   async challengeForAuthorizationCode(client, authorizationCode) {
+    console.error(`[OAuth] challengeForAuthorizationCode() — code: ${authorizationCode?.slice(0, 16)}...`);
     const codeData = await this.store.getAuthCode(authorizationCode);
     if (!codeData) {
+      console.error(`[OAuth] challengeForAuthorizationCode() — NOT FOUND (stale or expired code)`);
       throw new Error("Invalid or expired authorization code");
     }
+    console.error(`[OAuth] challengeForAuthorizationCode() — FOUND`);
     return codeData.codeChallenge;
   }
 
