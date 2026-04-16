@@ -40,7 +40,7 @@ function decrypt(encoded) {
 const OAUTH_SESSION_TTL = 600;
 const AUTH_CODE_TTL = 300;
 const ACCESS_TOKEN_TTL = 3600;
-const REFRESH_TOKEN_TTL = 2592000;
+const REFRESH_TOKEN_TTL = 2147483; // ~24.8 days — capped to Node.js setTimeout 32-bit limit for MemoryStore/RedisStore consistency
 const CLIENT_TTL = 31536000; // 365 days
 
 // --- Encryption helpers for store payloads ---
@@ -105,7 +105,7 @@ class MemoryStore {
   }
 
   // --- OAuth Client Registration ---
-  async saveClient(client) { this._set(`client:${client.client_id}`, encryptPayload(client, "_none"), CLIENT_TTL); }
+  async saveClient(client) { this._set(`client:${client.client_id}`, { ...client }, CLIENT_TTL); }
   async getClient(clientId) { const d = this._get(`client:${clientId}`); return d ? { ...d } : undefined; }
   async deleteClient(clientId) { this._del(`client:${clientId}`); }
 

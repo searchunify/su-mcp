@@ -84,11 +84,29 @@ class SUMcpOAuthProvider {
     console.error(`[OAuth] authorize() — session saved to Redis key: su-mcp:session:${sessionId.slice(0, 8)}...`);
 
     const basePath = new URL(this.mcpCallbackUrl).pathname.replace(/\/su-callback$/, "");
+    const nonce = crypto.randomBytes(16).toString("base64");
     const formHTML = getInstanceFormHTML({
       formAction: `${basePath}/authorize/start`,
       sessionId,
+      nonce,
     });
+    res.set("Content-Security-Policy", `default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; img-src data:; form-action 'self'; frame-ancestors 'none'`);
     res.status(200).type("html").send(formHTML);
+  }
+
+  async _handleAuthorizeStartInternal(sessionId, instanceUrl, suClientId, suClientSecret, uid, mcpSessionId = null) {
+    const session = await this.store.getOAuthSession(sessionId);
+    if (!session) throw new Error("Invalid or expired session");
+    session.instanceUrl = instanceUrl.replace(/\/$/, "");
+    session.suClientId = suClientId;
+    session.suClientSecret = suClientSecret;
+    session.uid = uid;
+    if (mcpSessionId !== null) session.mcpSessionId = mcpSessionId;
+    await this.store.saveOAuthSession(sessionId, session);
+    return `${session.instanceUrl}/auth/authorise_redirect`
+      + `?client_id=${encodeURIComponent(suClientId)}`
+      + `&redirect_uri=${encodeURIComponent(this.mcpCallbackUrl)}`
+      + `&state=${encodeURIComponent(sessionId)}`;
   }
 
   /**
@@ -102,28 +120,7 @@ class SUMcpOAuthProvider {
    */
   async handleAuthorizeStart(sessionId, instanceUrl, suClientId, suClientSecret, uid) {
     console.error(`[OAuth] handleAuthorizeStart() — sessionId: ${sessionId.slice(0, 8)}... instance: ${instanceUrl}`);
-    const session = await this.store.getOAuthSession(sessionId);
-    console.error(`[OAuth] handleAuthorizeStart() — session lookup result: ${session ? "FOUND" : "NOT FOUND"}`);
-    if (!session) {
-      throw new Error("Invalid or expired session");
-    }
-
-    // Store instance URL, SU OAuth client creds, and UID in the session
-    session.instanceUrl = instanceUrl.replace(/\/$/, "");
-    session.suClientId = suClientId;
-    session.suClientSecret = suClientSecret;
-    session.uid = uid;
-    await this.store.saveOAuthSession(sessionId, session);
-
-    // Build SU authorize URL
-    // SU's /auth/authorise_redirect expects: client_id, redirect_uri, state
-    // We pass our sessionId as state so we can correlate the callback
-    const suAuthorizeUrl = `${session.instanceUrl}/auth/authorise_redirect`
-      + `?client_id=${encodeURIComponent(suClientId)}`
-      + `&redirect_uri=${encodeURIComponent(this.mcpCallbackUrl)}`
-      + `&state=${encodeURIComponent(sessionId)}`;
-
-    return suAuthorizeUrl;
+    return this._handleAuthorizeStartInternal(sessionId, instanceUrl, suClientId, suClientSecret, uid);
   }
 
   /**
@@ -137,25 +134,7 @@ class SUMcpOAuthProvider {
    * @param {string} uid - SU user ID
    */
   async handleAuthorizeStartForTool(mcpSessionId, instanceUrl, suClientId, suClientSecret, uid) {
-    // For the tool flow the OAuth session is keyed by mcpSessionId (set up by the login route)
-    const session = await this.store.getOAuthSession(mcpSessionId);
-    if (!session) {
-      throw new Error("Invalid or expired session");
-    }
-
-    session.instanceUrl = instanceUrl.replace(/\/$/, "");
-    session.suClientId = suClientId;
-    session.suClientSecret = suClientSecret;
-    session.uid = uid;
-    session.mcpSessionId = mcpSessionId;
-    await this.store.saveOAuthSession(mcpSessionId, session);
-
-    const suAuthorizeUrl = `${session.instanceUrl}/auth/authorise_redirect`
-      + `?client_id=${encodeURIComponent(suClientId)}`
-      + `&redirect_uri=${encodeURIComponent(this.mcpCallbackUrl)}`
-      + `&state=${encodeURIComponent(mcpSessionId)}`;
-
-    return suAuthorizeUrl;
+    return this._handleAuthorizeStartInternal(mcpSessionId, instanceUrl, suClientId, suClientSecret, uid, mcpSessionId);
   }
 
   /**
@@ -295,6 +274,7 @@ class SUMcpOAuthProvider {
         }
       );
       req.on("error", reject);
+      req.setTimeout(10000, () => { req.destroy(new Error("SU token exchange timed out")); });
       req.write(body);
       req.end();
     });
@@ -420,8 +400,12 @@ class SUMcpOAuthProvider {
   async revokeToken(client, request) {
     const { token, token_type_hint } = request;
     if (token_type_hint === "refresh_token") {
+      const data = await this.store.getRefreshToken(token);
+      if (data && data.clientId !== client.client_id) return; // RFC 7009: ignore silently
       await this.store.deleteRefreshToken(token);
     } else {
+      const data = await this.store.getAccessToken(token);
+      if (data && data.clientId !== client.client_id) return; // RFC 7009: ignore silently
       await this.store.deleteAccessToken(token);
     }
   }
