@@ -41,7 +41,7 @@ const OAUTH_SESSION_TTL = 600;
 const AUTH_CODE_TTL = 300;
 const ACCESS_TOKEN_TTL = 3600;
 const REFRESH_TOKEN_TTL = 2592000;
-const CLIENT_TTL = 2592000;
+const CLIENT_TTL = 31536000; // 365 days
 
 // --- Encryption helpers for store payloads ---
 

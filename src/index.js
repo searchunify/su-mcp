@@ -177,6 +177,33 @@ async function runHttp(creds, port) {
       next();
     });
 
+    // Auto-registration guard on /token for refresh_token requests with unknown client_id.
+    // If the client was deleted (e.g. Redis flush), re-register so the refresh can succeed
+    // rather than failing with invalid_client before even checking the refresh token.
+    app.post(`${basePath}/token`, express.urlencoded({ extended: false }), async (req, res, next) => {
+      const { client_id, redirect_uri, grant_type } = req.body;
+      if (grant_type === "refresh_token" && client_id) {
+        try {
+          const existing = await oauthProvider.clientsStore.getClient(client_id);
+          if (!existing) {
+            const uri = redirect_uri || "http://localhost:8033/oauth/callback";
+            console.error(`[OAuth] /token — unknown client ${client_id.slice(0, 8)}..., auto-registering`);
+            await oauthProvider.clientsStore.registerClient({
+              client_id,
+              redirect_uris: [uri],
+              client_name: "mcp-remote",
+              grant_types: ["authorization_code", "refresh_token"],
+              response_types: ["code"],
+              token_endpoint_auth_method: "none",
+            });
+          }
+        } catch (err) {
+          console.error(`[OAuth] /token auto-registration error: ${err.message}`);
+        }
+      }
+      next();
+    });
+
     // Mount the SDK's OAuth auth router (handles /authorize, /token, /register, /.well-known/*)
     // Uses basePath so endpoints are accessible behind a reverse proxy (e.g., /7777/authorize)
     app.use(basePath, mcpAuthRouter({
