@@ -260,7 +260,7 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
       const isToolSession = await oauthProvider.handleSuCallbackForTool(code, state);
       if (isToolSession) {
         const nonce = generateNonce();
-        res.set("Content-Security-Policy", `default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; img-src data:; form-action 'self'; frame-ancestors 'none'`);
+        res.set("Content-Security-Policy", `default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; connect-src 'self'; img-src data:; form-action 'self'; frame-ancestors 'none'`);
         return res.status(200).type("html").send(loginSuccessHTML(undefined, nonce));
       }
 
@@ -329,7 +329,7 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
     await oauthProvider.store.saveOAuthSession(mcpSessionId, { mcpSessionId });
     const { getInstanceFormHTML } = await import("./auth/config-form.js");
     const nonce = generateNonce();
-    res.set("Content-Security-Policy", `default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; img-src data:; form-action 'self'; frame-ancestors 'none'`);
+    res.set("Content-Security-Policy", `default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; connect-src 'self'; img-src data:; form-action 'self'; frame-ancestors 'none'`);
     res.status(200).type("html").send(
       getInstanceFormHTML({ formAction: "/mcp-connect/authorize/start", sessionId: mcpSessionId, nonce })
     );

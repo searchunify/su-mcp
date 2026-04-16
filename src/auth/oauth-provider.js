@@ -90,7 +90,7 @@ class SUMcpOAuthProvider {
       sessionId,
       nonce,
     });
-    res.set("Content-Security-Policy", `default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; img-src data:; form-action 'self'; frame-ancestors 'none'`);
+    res.set("Content-Security-Policy", `default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}'; connect-src 'self'; img-src data:; form-action 'self'; frame-ancestors 'none'`);
     res.status(200).type("html").send(formHTML);
   }
 
