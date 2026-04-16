@@ -8,7 +8,7 @@ By leveraging [su-sdk-js](https://www.npmjs.com/package/su-sdk), this server exp
 ## Features
 
 - **LLM-Integrated Enterprise Search** -- Power GenAI tools like Claude with context-aware, enterprise-grade search from SearchUnify, enabling more relevant, trusted, and explainable responses.
-- **Search Analytics** -- Retrieve analytics reports (top queries, zero-result queries, conversion data, and more) directly through AI assistants.
+- **Search Analytics** -- Retrieve analytics reports (top queries, zero-result queries, conversion data, and more) directly through AI assistants. The MCP server sets `sendMcpConsumptionTrack: true` on the SDK so analytics HTTP calls include `X-SearchUnify-MCP-Track: 1` for daily usage tracking in the analytics service (documented in the analytics repo under `docs/mcp-consumption-tracking.md`).
 - **Faceted Filtering** -- Discover and apply facet/filter options to narrow search results by category, source, index, and other dimensions.
 - **Multiple Authentication Methods** -- Supports API Key, OAuth 2.0 Password Grant, and Client Credentials Grant for flexible, enterprise-grade security.
 - **Dual Transport** -- Runs over **stdio** (for local tools like Claude Desktop) or **HTTP** (Streamable HTTP for remote/cloud clients), or both simultaneously.
@@ -18,7 +18,7 @@ By leveraging [su-sdk-js](https://www.npmjs.com/package/su-sdk), this server exp
 
 ## Tools
 
-The MCP server exposes **4 tools** that AI assistants can invoke:
+The MCP server exposes **5 tools** that AI assistants can invoke:
 
 ### 1. `search`
 
@@ -104,6 +104,21 @@ Lists all search clients configured in the SearchUnify instance. Returns minimal
 | `name` | Search client name. |
 | `uid` | Search client unique identifier (UUID). |
 | `search_client_type` | Type of search client (e.g. Web App, Salesforce, etc.). Available on instances running admin v25-nov or later. |
+
+---
+
+### 5. `executive_business_query`
+
+Runs **Phase 1 executive** analytics recipes (Q11 traffic, Q12 search-without-click %, Q5 relevance, Q13 content gap, Q4 self-solve) by composing existing analytics HTTP APIs. Responses are JSON with **per-subcall** status so partial failures stay visible (for example **401** when leadership is called without a proxy that injects `analytics-secret`).
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `recipeId` | enum | Yes | `Q11_traffic`, `Q12_search_no_click_pct`, `Q5_relevance_rate`, `Q13_content_gap`, `Q4_self_solve_rate`. |
+| `tenantId`, `from`, `to` | strings | Yes | Tenant UUID and date range (`YYYY-MM-DD`). |
+| `uid` / `ecoId` | UUID | No | Search client or ecosystem scope (same rules as analytics APIs). |
+| `includeLeadershipQuarterly` | boolean | No | Q4 only: also call `/leadership/*` USSV + ASSV. Use an `instance` URL that routes analytics through **admin** (or another BFF) so **`analytics-secret`** is added upstream; calling the analytics service directly may return **401** for these paths. |
+
+**Docs:** [`analytics/docs/business-queries/README.md`](../analytics/docs/business-queries/README.md) (formulas, rollup checklist, orchestration).
 
 ---
 

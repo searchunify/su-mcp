@@ -66,6 +66,7 @@ function getCredsFromHeaders(headers) {
 
   const authType = (get('auth-type') || 'apiKey').toLowerCase();
   const timeout = parseInt(get('timeout') || '60000', 10);
+
   const config = {
     instance,
     uid,
@@ -95,7 +96,10 @@ function getCredsFromHeaders(headers) {
     return null;
   }
 
-  const restClientConfig = { ...config, sendMcpConsumptionTrack: true };
+  const restClientConfig = {
+    ...config,
+    sendMcpConsumptionTrack: true,
+  };
   delete restClientConfig.uid;
   // instance: platform base URL; su-sdk appends /api/v2/... (SearchUnifyRestClient strips duplicate trailing /api/v2)
   const suRestClient = new SearchUnifyRestClient(restClientConfig);

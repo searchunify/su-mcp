@@ -200,4 +200,10 @@ describe('Module imports', () => {
     assert.ok(mod.initializeSuCoreTools);
     assert.equal(typeof mod.initializeSuCoreTools, 'function');
   });
+
+  it('should import executive business query module without error', async () => {
+    const mod = await import('../src/su-core/su-core-business-queries.js');
+    assert.ok(mod.initializeExecutiveBusinessQueryTools);
+    assert.equal(typeof mod.initializeExecutiveBusinessQueryTools, 'function');
+  });
 });
