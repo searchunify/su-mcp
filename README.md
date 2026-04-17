@@ -329,15 +329,13 @@ Fully quit (Cmd+Q on macOS) and reopen Claude Desktop to apply the updated confi
 
 ---
 
-### Integration 3: Self-Hosted HTTP via `mcp-remote` (Header Auth)
+### Integration 3: Remote HTTP via `mcp-remote` (Header Auth)
 
-For connecting to a **self-hosted** SearchUnify MCP server over HTTP, use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote). Credentials are passed as HTTP headers on every request — no local `creds.json` is needed. To run su-mcp via mcp-remote **node version 24** is required on the machine.
+For connecting to a SearchUnify MCP server over HTTP, use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote). Credentials are passed as HTTP headers on every request — no local `creds.json` is needed. To run su-mcp via mcp-remote **node version 24** is required on the machine.
 
-> **Important:** This integration only works when the MCP server is running **without** `OAUTH_ENCRYPTION_KEY` (OAuth disabled). When OAuth is enabled — as on managed servers like `mcp.searchunify.com` — the `/mcp` endpoint requires a Bearer token and rejects custom headers. For managed servers, use **Integration 4** (Claude directory OAuth) or **Integration 5** (tool-based login) instead.
+> **Endpoint note:** Use the root URL (`https://mcp.searchunify.com/`) — not `/mcp`. On OAuth-enabled servers the `/mcp` endpoint requires a Bearer token; the root endpoint (`/`) always accepts header-based credentials for backward compatibility.
 
 #### Claude Desktop Configuration
-
-Replace `http://localhost:3000` with the URL of your self-hosted MCP server (must be running without `OAUTH_ENCRYPTION_KEY`):
 
 ```json
 {
@@ -346,7 +344,7 @@ Replace `http://localhost:3000` with the URL of your self-hosted MCP server (mus
       "command": "npx",
       "args": [
         "mcp-remote",
-        "http://localhost:3000/mcp",
+        "https://mcp.searchunify.com/",
         "--header",
         "searchunify-instance:<searchunify_instance_url>",
         "--header",
@@ -393,7 +391,7 @@ All header names use the `searchunify-` prefix (lowercase):
       "command": "npx",
       "args": [
         "mcp-remote",
-        "http://localhost:3000/mcp",
+        "https://mcp.searchunify.com/",
         "--header",
         "searchunify-instance:https://your-instance.searchunify.com",
         "--header",
@@ -419,7 +417,7 @@ All header names use the `searchunify-` prefix (lowercase):
       "command": "npx",
       "args": [
         "mcp-remote",
-        "http://localhost:3000/mcp",
+        "https://mcp.searchunify.com/",
         "--header",
         "searchunify-instance:https://your-instance.searchunify.com",
         "--header",
@@ -451,7 +449,7 @@ All header names use the `searchunify-` prefix (lowercase):
       "command": "npx",
       "args": [
         "mcp-remote",
-        "http://localhost:3000/mcp",
+        "https://mcp.searchunify.com/",
         "--header",
         "searchunify-instance:https://your-instance.searchunify.com",
         "--header",
