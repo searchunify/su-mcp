@@ -2,3 +2,10 @@ node_modules
 src/input/creds.json
 src/input/*.json
 .git
+docker-compose.yml
+.env
+.env.example
+test/
+scripts/
+README.md
+*.md
