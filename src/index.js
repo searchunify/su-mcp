@@ -1,6 +1,12 @@
 import crypto from "node:crypto";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
 import { AsyncLocalStorage } from "node:async_hooks";
 import express from "express";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf8"));
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -34,8 +40,8 @@ function isOAuthEnabled() {
 
 function createMcpServer() {
   return new McpServer({
-    name: process.env.npm_package_name || "searchunify-mcp",
-    version: process.env.npm_package_version || "unknown",
+    name: process.env.npm_package_name || pkg.name,
+    version: process.env.npm_package_version || pkg.version,
     capabilities: {
       resources: {},
       tools: {},
