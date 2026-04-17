@@ -329,13 +329,15 @@ Fully quit (Cmd+Q on macOS) and reopen Claude Desktop to apply the updated confi
 
 ---
 
-### Integration 3: Remote HTTP via `mcp-remote` (Streamable HTTP)
+### Integration 3: Self-Hosted HTTP via `mcp-remote` (Header Auth)
 
-For connecting to a remotely hosted SearchUnify MCP server over HTTP, use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote). Credentials are passed as HTTP headers on every request -- no local `creds.json` is needed. To run su-mcp via mcp-remote **node version 24** is required on the machine.
+For connecting to a **self-hosted** SearchUnify MCP server over HTTP, use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote). Credentials are passed as HTTP headers on every request — no local `creds.json` is needed. To run su-mcp via mcp-remote **node version 24** is required on the machine.
+
+> **Important:** This integration only works when the MCP server is running **without** `OAUTH_ENCRYPTION_KEY` (OAuth disabled). When OAuth is enabled — as on managed servers like `mcp.searchunify.com` — the `/mcp` endpoint requires a Bearer token and rejects custom headers. For managed servers, use **Integration 4** (Claude directory OAuth) or **Integration 5** (tool-based login) instead.
 
 #### Claude Desktop Configuration
 
-Add the following to your Claude Desktop `claude_desktop_config.json`:
+Replace `http://localhost:3000` with the URL of your self-hosted MCP server (must be running without `OAUTH_ENCRYPTION_KEY`):
 
 ```json
 {
@@ -344,7 +346,7 @@ Add the following to your Claude Desktop `claude_desktop_config.json`:
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://mcp.searchunify.com/mcp",
+        "http://localhost:3000/mcp",
         "--header",
         "searchunify-instance:<searchunify_instance_url>",
         "--header",
@@ -391,7 +393,7 @@ All header names use the `searchunify-` prefix (lowercase):
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://mcp.searchunify.com/mcp",
+        "http://localhost:3000/mcp",
         "--header",
         "searchunify-instance:https://your-instance.searchunify.com",
         "--header",
@@ -417,7 +419,7 @@ All header names use the `searchunify-` prefix (lowercase):
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://mcp.searchunify.com/mcp",
+        "http://localhost:3000/mcp",
         "--header",
         "searchunify-instance:https://your-instance.searchunify.com",
         "--header",
@@ -449,7 +451,7 @@ All header names use the `searchunify-` prefix (lowercase):
       "command": "npx",
       "args": [
         "mcp-remote",
-        "https://mcp.searchunify.com/mcp",
+        "http://localhost:3000/mcp",
         "--header",
         "searchunify-instance:https://your-instance.searchunify.com",
         "--header",
@@ -548,8 +550,12 @@ Claude Desktop → connects to /mcp-connect (no OAuth, no browser)
 
 #### Prerequisites
 
-- Same as Integration 4: an OAuth client must be registered in your SearchUnify Admin with redirect URI `<MCP_ISSUER_URL>/su-callback` (e.g. `https://mcp.searchunify.com/su-callback`).
-- The MCP server must have `OAUTH_ENCRYPTION_KEY` and `MCP_ISSUER_URL` set.
+- The MCP server must have `OAUTH_ENCRYPTION_KEY` and `MCP_ISSUER_URL` set (same as Integration 4).
+- An OAuth client must be registered in your SearchUnify Admin with **both** the following redirect URIs allowed:
+  - `<MCP_ISSUER_URL>/su-callback` (e.g. `https://mcp.searchunify.com/su-callback`) — used by the standard OAuth flow
+  - The same URL is used for the tool-based flow; if testing locally, also add `http://localhost:<port>/su-callback`
+
+> **Local testing note:** If the MCP server's `su-callback` URL is not registered in the SU OAuth client, SU will redirect to its own dashboard after login instead of returning to the MCP server. Always register the exact callback URL for each environment.
 
 #### Claude Desktop Configuration
 
@@ -664,12 +670,19 @@ Runs validation and module import tests for all tools.
 
 ```
 su-mcp/
-├── Dockerfile                  # Docker image definition (Node 24 Alpine, default transport: both)
+├── Dockerfile                  # Docker image definition (Node 24 Alpine, default transport: http)
+├── docker-compose.yml          # Compose file for Docker-based deployment
+├── .env.example                # Environment variable template (copy to .env and fill in values)
 ├── package.json                # Dependencies and scripts
 ├── test/
-│   └── test-new-tools.js       # Unit tests for tools
+│   ├── test-new-tools.js                 # Unit tests for tools
+│   ├── store.test.js                     # MemoryStore / RedisStore unit tests
+│   ├── store-fallback.test.js            # Store factory fallback tests
+│   ├── oauth-provider.test.js            # OAuth provider unit tests
+│   └── validate-authorize-body.test.js   # Form validation tests
 ├── scripts/
-│   └── test-mcp-client.js      # Test client for stdio and HTTP
+│   ├── test-mcp-client.js      # Test client for stdio and HTTP
+│   └── test-oauth-flow.js      # OAuth flow test script
 └── src/
     ├── index.js                # Entry point -- transport setup (stdio/HTTP/OAuth)
     ├── tools.js                # Tool initialization orchestrator
