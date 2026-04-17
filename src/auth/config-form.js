@@ -73,8 +73,10 @@ function getInstanceFormHTML({ formAction, sessionId, nonce = "" }) {
     @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── Footer ── */
-    .card-footer { border-top: 1px solid #f0f0f0; padding: 10px 24px; text-align: center; font-size: 11px; color: #bbb; display: flex; align-items: center; justify-content: center; gap: 5px; }
+    .card-footer { border-top: 1px solid #f0f0f0; padding: 10px 24px; text-align: center; font-size: 11px; color: #bbb; display: flex; align-items: center; justify-content: center; gap: 5px; flex-wrap: wrap; }
     .card-footer svg { color: #16a34a; flex-shrink: 0; }
+    .card-footer a { color: #FF7300; text-decoration: none; }
+    .card-footer a:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
@@ -130,6 +132,7 @@ function getInstanceFormHTML({ formAction, sessionId, nonce = "" }) {
         <path d="M8 1a4 4 0 0 1 4 4v1h1a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h1V5a4 4 0 0 1 4-4zm0 1.5A2.5 2.5 0 0 0 5.5 5v1h5V5A2.5 2.5 0 0 0 8 2.5z"/>
       </svg>
       No passwords stored &nbsp;·&nbsp; Powered by <strong>&nbsp;SearchUnify</strong>
+      &nbsp;·&nbsp; <a href="https://docs.searchunify.com/Content/Developer-Guides/MCP.htm" target="_blank" rel="noopener noreferrer">Setup docs</a>
     </div>
   </div>
 
