@@ -124,7 +124,9 @@ async function serveStatelessMcpRequest(req, res, requestCreds) {
   if (req.body?.method === "tools/call") {
     const ip = req.headers["x-forwarded-for"] ?? req.ip ?? "unknown";
     const instance = requestCreds?.config?.instance ?? "unauthenticated";
-    console.error(`[Tool] ${req.body.params?.name ?? "unknown"} — ${req.method} ${req.path} from ${ip} (${instance})`);
+    const clientId = req.auth?.clientId ? `client:${req.auth.clientId.slice(0, 8)}` : null;
+    const parts = [instance, clientId].filter(Boolean).join(" ");
+    console.error(`[Tool] ${req.body.params?.name ?? "unknown"} — ${req.method} ${req.path} from ${ip} (${parts})`);
   }
   const reqServer = createMcpServer();
   const getCreds = () => requestCreds;
