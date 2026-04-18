@@ -19,7 +19,7 @@ const reportTypes = {
 };
 
 const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
-  const c = () => (getCreds ? getCreds() : creds);
+  const c = async () => (getCreds ? await getCreds() : creds);
   server.tool(
     "analytics",
     "Analytics reports from SearchUnify. For headline/count questions: tileDataContent = content-gap metrics (failed searches, no-click, no-result, sessions, daily averages). tileDataMetrics1 = session/visitor tile: the API field `visitors` is the session count (also exposed as `sessionCount` in MCP output); plus searchUsers, uniqueUsersByDevice, emptyEmailSessionCount, uniqueUsersByEmail. Ignore undefined placeholders for click/search/case fields on this endpoint. tileDataMetrics2 = search/click/conversion metrics (searches, withResult, withoutResult, uniqueSearches, clicks, clickedSessions, caseCount). Do not use tileDataMetrics1 for searches, clicks, cases, or with/without result — use tileDataMetrics2.",
@@ -43,7 +43,8 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
       ),
     sortType: z.enum(["asc", "desc"]).optional().describe("sort direction; defaults to desc where applicable"),
   }, async ({ reportType, startDate, endDate, count, sessionId, pageNumber, startIndex, sortByField, sortType }) => {
-    const credsForRequest = c();
+    const credsForRequest = await c();
+    if (!credsForRequest) return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
     const Analytics = credsForRequest.suRestClient.Analytics();
     let analyticsResponse = {};
     switch(reportType){
