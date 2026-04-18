@@ -290,6 +290,15 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
   // handleRequest requires (req, res, parsedBody) — body must be pre-parsed.
   const bearerAuth = requireBearerAuth({ verifier: oauthProvider });
 
+  // Explicit OPTIONS handler — must come before bearerAuth or it intercepts preflight
+  app.options(`${basePath}/mcp`, (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, mcp-session-id, Accept");
+    res.set("Access-Control-Expose-Headers", "mcp-session-id");
+    res.status(204).end();
+  });
+
   app.all(`${basePath}/mcp`, express.json(), bearerAuth, async (req, res) => {
     const ts = new Date().toISOString();
     console.error(`[MCP HTTP] ${ts} ${req.method} ${basePath}/mcp (OAuth)`);
@@ -422,6 +431,15 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
  * Always mounted regardless of OAuth mode, providing backward compatibility.
  */
 function setupNonOAuthMcpRoutes(app, creds, mcpRateLimit) {
+  // Explicit OPTIONS handler for non-OAuth path (same reason as OAuth path above)
+  app.options("/mcp", (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, mcp-session-id, Accept");
+    res.set("Access-Control-Expose-Headers", "mcp-session-id");
+    res.status(204).end();
+  });
+
   // Non-OAuth MCP endpoint — header-based auth (backward compatible)
   app.all("/mcp", mcpRateLimit, express.json(), async (req, res) => {
     const ts = new Date().toISOString();
