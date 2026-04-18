@@ -123,7 +123,8 @@ function generateNonce() {
 async function serveStatelessMcpRequest(req, res, requestCreds) {
   if (req.body?.method === "tools/call") {
     const ip = req.headers["x-forwarded-for"] ?? req.ip ?? "unknown";
-    console.error(`[Tool] ${req.body.params?.name ?? "unknown"} — ${req.method} ${req.path} from ${ip}`);
+    const instance = requestCreds?.config?.instance ?? "unauthenticated";
+    console.error(`[Tool] ${req.body.params?.name ?? "unknown"} — ${req.method} ${req.path} from ${ip} (${instance})`);
   }
   const reqServer = createMcpServer();
   const getCreds = () => requestCreds;
