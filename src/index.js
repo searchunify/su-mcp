@@ -493,6 +493,16 @@ async function runHttp(creds, port) {
   // Note: do NOT use app.use(express.json()) globally — it consumes the request body
   // before StreamableHTTPServerTransport can read it. Only apply JSON parsing on specific routes.
 
+  // CORS — required for browser-based clients (Claude.ai web, Cowork)
+  app.use((req, res, next) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, mcp-session-id, Accept");
+    res.set("Access-Control-Expose-Headers", "mcp-session-id");
+    if (req.method === "OPTIONS") return res.status(204).end();
+    next();
+  });
+
   // Security headers for all responses (applied regardless of OAuth mode)
   app.use((req, res, next) => {
     res.set({
