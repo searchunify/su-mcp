@@ -29,8 +29,8 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
       .describe(
         "Which report to fetch. Tile APIs: tileDataContent (content gap); tileDataMetrics1 (visitors = session count, searchUsers, uniqueUsersByDevice, email metrics); tileDataMetrics2 (search volume, results split, clicks, cases). Classification: searchQueryWith* / getAllSearchQuery. Conversion: getAllSearchConversion, averageClickPosition. Sessions: sessionDetails, sessionListTable."
       ),
-    startDate: z.string().describe("start date of the report"),
-    endDate: z.string().describe("end date of the report"),
+    startDate: z.string().describe("Start date of the report in YYYY-MM-DD format"),
+    endDate: z.string().describe("End date of the report in YYYY-MM-DD format"),
     count: z.number().min(1).max(500).describe("number of records to be fetched (1-500)"),
     sessionId: z.string().optional().describe("optional session cookie filter for sessionDetails (GET /api/v2/session/log/all) and sessionListTable (GET /api/v2/session/list/table)"),
     pageNumber: z.number().min(1).max(10).optional().describe("page number for the 4 search classification reports (max 10 in MCP)"),
