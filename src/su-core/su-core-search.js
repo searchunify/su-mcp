@@ -17,6 +17,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     versionResults: z.boolean().default(false).optional().describe("This field speicifies whether to use versioning or not. Default value is true."),
     // sortOrder: z.enum(["asc", "desc"]).optional().describe("sort order for results, asc or desc"),
   }, {
+    title: "Search",
     readOnlyHint: true,
     destructiveHint: false,
     openWorldHint: true,
@@ -94,6 +95,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       aggregations: z.array(aggregationSchema).optional().describe("optional list of current filters to get filter options in context of filtered results"),
     },
     {
+      title: "Get Filter Options",
       readOnlyHint: true,
       destructiveHint: false,
       openWorldHint: true,

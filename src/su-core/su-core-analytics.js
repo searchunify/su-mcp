@@ -42,6 +42,11 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         "Sort field: for search-classification reports use count (query frequency). For sessionListTable use click, search, case, page_view, support, end_date, or start_date. For sessionDetails (session log) use the same except page_view when not applicable — if you pass count here it is sent as click for classification reports only."
       ),
     sortType: z.enum(["asc", "desc"]).optional().describe("sort direction; defaults to desc where applicable"),
+  }, {
+    title: "Analytics",
+    readOnlyHint: true,
+    destructiveHint: false,
+    openWorldHint: true,
   }, async ({ reportType, startDate, endDate, count, sessionId, pageNumber, startIndex, sortByField, sortType }) => {
     const credsForRequest = await c();
     if (!credsForRequest) return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
