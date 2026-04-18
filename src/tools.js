@@ -1,7 +1,6 @@
 import { initializeSuCoreTools } from "./su-core/index.js";
 
 export const initializeTools = async ({ server, creds, getCreds, mcpSessionId, oauthProvider }) => {
-  console.error("Initializing tools...");
   await initializeSuCoreTools({ server, creds, getCreds });
 
   // Register the login tool only on the /mcp-connect endpoint (tool-based auth flow).

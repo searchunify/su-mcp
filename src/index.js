@@ -121,6 +121,10 @@ function generateNonce() {
  * Used by all three stateless MCP endpoints (OAuth /mcp, header-auth /mcp, legacy /).
  */
 async function serveStatelessMcpRequest(req, res, requestCreds) {
+  if (req.body?.method === "tools/call") {
+    const ip = req.headers["x-forwarded-for"] ?? req.ip ?? "unknown";
+    console.error(`[Tool] ${req.body.params?.name ?? "unknown"} — ${req.method} ${req.path} from ${ip}`);
+  }
   const reqServer = createMcpServer();
   const getCreds = () => requestCreds;
   await initializeTools({ server: reqServer, creds: requestCreds, getCreds });
@@ -360,6 +364,10 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
   app.all("/mcp-connect", mcpRateLimit, express.json(), async (req, res) => {
     const ts = new Date().toISOString();
     console.error(`[MCP HTTP] ${ts} ${req.method} /mcp-connect (tool-auth)`);
+    if (req.body?.method === "tools/call") {
+      const ip = req.headers["x-forwarded-for"] ?? req.ip ?? "unknown";
+      console.error(`[Tool] ${req.body.params?.name ?? "unknown"} — ${req.method} ${req.path} from ${ip}`);
+    }
 
     try {
       const existingId = req.headers["mcp-session-id"];
