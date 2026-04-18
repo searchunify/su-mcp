@@ -71,9 +71,7 @@ class SUMcpOAuthProvider {
    * which redirects to SU's login.
    */
   async authorize(client, params, res) {
-    // Store the OAuth session params in Redis so we can retrieve them after SU callback
     const sessionId = generateToken();
-    console.error(`[OAuth] authorize() — created sessionId: ${sessionId.slice(0, 8)}... clientId: ${client.client_id?.slice(0, 8)}...`);
     await this.store.saveOAuthSession(sessionId, {
       clientId: client.client_id,
       redirectUri: params.redirectUri,
@@ -81,7 +79,6 @@ class SUMcpOAuthProvider {
       state: params.state || "",
       scopes: params.scopes || [],
     });
-    console.error(`[OAuth] authorize() — session saved to Redis key: su-mcp:session:${sessionId.slice(0, 8)}...`);
 
     const basePath = new URL(this.mcpCallbackUrl).pathname.replace(/\/su-callback$/, "");
     const nonce = crypto.randomBytes(16).toString("base64");
@@ -119,7 +116,6 @@ class SUMcpOAuthProvider {
    * @param {string} uid - Search Client UID (used in search/analytics API calls)
    */
   async handleAuthorizeStart(sessionId, instanceUrl, suClientId, suClientSecret, uid) {
-    console.error(`[OAuth] handleAuthorizeStart() — sessionId: ${sessionId.slice(0, 8)}... instance: ${instanceUrl}`);
     return this._handleAuthorizeStartInternal(sessionId, instanceUrl, suClientId, suClientSecret, uid);
   }
 
@@ -178,29 +174,22 @@ class SUMcpOAuthProvider {
    * SU redirects here with ?code=SU_AUTH_CODE&state=SESSION_ID
    */
   async handleSuCallback(suAuthCode, sessionId) {
-    console.error(`[OAuth] handleSuCallback() — state/sessionId received: ${sessionId?.slice(0, 8)}... (len: ${sessionId?.length})`);
     const session = await this.store.getOAuthSession(sessionId);
-    console.error(`[OAuth] handleSuCallback() — session lookup result: ${session ? "FOUND" : "NOT FOUND"}`);
     if (!session) {
       throw new Error("Invalid or expired OAuth session");
     }
 
-    // Exchange SU auth code for SU access token using the per-session SU client creds
-    console.error(`[OAuth] handleSuCallback() — exchanging SU code at: ${session.instanceUrl}/oauth/token/ clientId: ${session.suClientId?.slice(0, 8)}...`);
     let suTokens;
     try {
       suTokens = await this._exchangeSuCode(
         session.instanceUrl, suAuthCode, session.suClientId, session.suClientSecret
       );
-      console.error(`[OAuth] handleSuCallback() — SU token exchange SUCCESS, has access_token: ${!!(suTokens.access_token || suTokens.accessToken)}`);
     } catch (err) {
-      console.error(`[OAuth] handleSuCallback() — SU token exchange FAILED: ${err.message}`);
+      console.error(`[OAuth] SU token exchange failed: ${err.message}`);
       throw err;
     }
 
-    // Generate MCP auth code and store it with the SU tokens
     const mcpAuthCode = generateToken();
-    console.error(`[OAuth] handleSuCallback() — MCP auth code generated, redirecting to: ${session.redirectUri?.slice(0, 30)}...`);
     await this.store.saveAuthCode(mcpAuthCode, {
       clientId: session.clientId,
       redirectUri: session.redirectUri,
@@ -284,13 +273,10 @@ class SUMcpOAuthProvider {
    * Returns the stored code_challenge for a given authorization code.
    */
   async challengeForAuthorizationCode(client, authorizationCode) {
-    console.error(`[OAuth] challengeForAuthorizationCode() — code: ${authorizationCode?.slice(0, 16)}...`);
     const codeData = await this.store.getAuthCode(authorizationCode);
     if (!codeData) {
-      console.error(`[OAuth] challengeForAuthorizationCode() — NOT FOUND (stale or expired code)`);
       throw new Error("Invalid or expired authorization code");
     }
-    console.error(`[OAuth] challengeForAuthorizationCode() — FOUND`);
     return codeData.codeChallenge;
   }
 
@@ -299,9 +285,7 @@ class SUMcpOAuthProvider {
    * The SDK handles PKCE validation before calling this.
    */
   async exchangeAuthorizationCode(client, authorizationCode) {
-    console.error(`[OAuth] exchangeAuthorizationCode() — code: ${authorizationCode?.slice(0, 8)}...`);
     const codeData = await this.store.getAuthCode(authorizationCode);
-    console.error(`[OAuth] exchangeAuthorizationCode() — authCode lookup: ${codeData ? "FOUND" : "NOT FOUND"}`);
     if (!codeData) {
       throw new Error("Invalid or expired authorization code");
     }
@@ -325,7 +309,6 @@ class SUMcpOAuthProvider {
       suTokens: codeData.suTokens,
     });
 
-    console.error(`[OAuth] exchangeAuthorizationCode() — access token stored: ${accessToken.slice(0, 8)}...`);
     return {
       access_token: accessToken,
       token_type: "bearer",
@@ -338,10 +321,8 @@ class SUMcpOAuthProvider {
    * Exchanges a refresh token for a new access token.
    */
   async exchangeRefreshToken(client, refreshToken, scopes) {
-    console.error(`[OAuth] exchangeRefreshToken() — client: ${client.client_id?.slice(0, 8)}... token: ${refreshToken?.slice(0, 8)}...`);
     const refreshData = await this.store.getRefreshToken(refreshToken);
     if (!refreshData) {
-      console.error(`[OAuth] exchangeRefreshToken() — refresh token NOT FOUND (expired or already rotated)`);
       throw new Error("Invalid or expired refresh token");
     }
 
@@ -364,7 +345,6 @@ class SUMcpOAuthProvider {
       suTokens: refreshData.suTokens,
     });
 
-    console.error(`[OAuth] exchangeRefreshToken() — new access token: ${accessToken.slice(0, 8)}... new refresh token: ${newRefreshToken.slice(0, 8)}... (old refresh token rotated)`);
     return {
       access_token: accessToken,
       token_type: "bearer",
@@ -377,15 +357,10 @@ class SUMcpOAuthProvider {
    * Verifies an access token and returns auth info.
    */
   async verifyAccessToken(token) {
-    console.error(`[OAuth] verifyAccessToken() — checking token: ${token?.slice(0, 8)}...`);
     const tokenData = await this.store.getAccessToken(token);
     if (!tokenData) {
-      console.error(`[OAuth] verifyAccessToken() — token NOT FOUND: ${token?.slice(0, 8)}...`);
-      // Throw InvalidTokenError so SDK returns 401 (not 500) and mcp-remote can retry OAuth
       throw new InvalidTokenError("Invalid or expired access token");
     }
-
-    console.error(`[OAuth] verifyAccessToken() — OK, client: ${tokenData.clientId?.slice(0, 8)}...`);
     return {
       token,
       clientId: tokenData.clientId,

@@ -149,7 +149,8 @@ class RedisStore {
   async connect() {
     try {
       const Redis = (await import("ioredis")).default;
-      this.redis = new Redis(this._redisUrl || process.env.REDIS_URL || "redis://localhost:6379", {
+      const DEFAULT_REDIS_URL = "redis://localhost:6379";
+      this.redis = new Redis(this._redisUrl || DEFAULT_REDIS_URL, {
         maxRetriesPerRequest: 3,
         retryStrategy(times) {
           if (times > 5) return null;

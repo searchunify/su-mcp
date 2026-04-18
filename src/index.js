@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { AsyncLocalStorage } from "node:async_hooks";
 import express from "express";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -57,7 +56,6 @@ async function runStdio(creds) {
   console.error("SearchUnify MCP Server running on stdio");
 }
 
-const httpCredsStorage = new AsyncLocalStorage();
 
 /**
  * Returns the "Login Successful" HTML page shown after SU authentication.
@@ -470,16 +468,6 @@ function startServer(app, port, oauthEnabled) {
 }
 
 async function runHttp(creds, port) {
-  const server = createMcpServer();
-  const getCreds = () => httpCredsStorage.getStore() ?? creds;
-  await initializeTools({ server, creds, getCreds });
-
-  // Stateless mode (no sessionIdGenerator) so multiple clients can connect and initialize.
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-  });
-  await server.connect(transport);
-
   let oauthEnabled = isOAuthEnabled();
   let oauthProvider;
 

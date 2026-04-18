@@ -277,7 +277,7 @@ Add the following entry to the `mcpServers` section:
 
 Replace `<path_to_creds.json>` with the absolute path to your `creds.json` file.
 
-> **Docker Image Tags:** Use `searchunifyutils/su-mcp` (defaults to `latest`) or pin a specific version with `searchunifyutils/su-mcp:1.1.0`. Available tags are published on [Docker Hub](https://hub.docker.com/r/searchunifyutils/su-mcp).
+> **Docker Image Tags:** Use `searchunifyutils/su-mcp` (defaults to `latest`) or pin a specific version with `searchunifyutils/su-mcp:2.0.0`. Available tags are published on [Docker Hub](https://hub.docker.com/r/searchunifyutils/su-mcp).
 
 #### Step 3 -- Restart Claude Desktop
 
@@ -531,29 +531,30 @@ When a user connects via Claude's directory:
 
 ---
 
-### Integration 5: Tool-Based Login via `/mcp-connect` (No Browser Required)
+### Integration 5: Tool-Based Login via `/mcp-connect`
 
-Use this integration when Claude Desktop **cannot auto-open a browser** to complete the OAuth flow (e.g. headless or restricted environments). Instead of opening a browser automatically, Claude surfaces a link in the chat — the user clicks it manually to open the connection form.
+Use this integration when the standard OAuth flow (Integration 4) does not work — for example when Claude Desktop fails to auto-complete the browser redirect, or when you prefer to initiate login manually from within the chat.
+
+A browser **is required** — the difference from Integration 4 is that the browser is opened **manually** by clicking a link surfaced in the chat, rather than being opened automatically by mcp-remote.
 
 **How it works:**
 ```
-Claude Desktop → connects to /mcp-connect (no OAuth, no browser)
-→ Claude calls login() tool
+Claude Desktop → connects to /mcp-connect
+→ Claude calls login() tool automatically
 → Chat shows: [Connect SearchUnify](https://mcp.searchunify.com/mcp-connect/login?s=...)
-→ User clicks link → same connection form (instance URL, OAuth Client ID, Secret)
-→ User logs in on their SearchUnify instance (SSO supported)
-→ "Login Successful" page → user returns to Claude
-→ All tools work normally
+→ User clicks the link → browser opens the connection form
+→ User fills in: Instance URL, Search Client UID, OAuth Client ID, OAuth Client Secret
+→ User is redirected to their SearchUnify login page (SSO supported)
+→ After login → "Login Successful" page in browser
+→ User returns to Claude → all tools are now available
 ```
 
 #### Prerequisites
 
 - The MCP server must have `OAUTH_ENCRYPTION_KEY` and `MCP_ISSUER_URL` set (same as Integration 4).
-- An OAuth client must be registered in your SearchUnify Admin with **both** the following redirect URIs allowed:
-  - `<MCP_ISSUER_URL>/su-callback` (e.g. `https://mcp.searchunify.com/su-callback`) — used by the standard OAuth flow
-  - The same URL is used for the tool-based flow; if testing locally, also add `http://localhost:<port>/su-callback`
+- An OAuth client must be registered in your SearchUnify Admin with `<MCP_ISSUER_URL>/su-callback` as an allowed redirect URI (e.g. `https://mcp.searchunify.com/su-callback`).
 
-> **Local testing note:** If the MCP server's `su-callback` URL is not registered in the SU OAuth client, SU will redirect to its own dashboard after login instead of returning to the MCP server. Always register the exact callback URL for each environment.
+> **Note:** If the SU OAuth client does not have the MCP server's `/su-callback` URL registered, SU will redirect to its own dashboard after login instead of completing the connection. Always register the exact callback URL for each environment (including localhost for local testing).
 
 #### Claude Desktop Configuration
 
@@ -571,11 +572,9 @@ Claude Desktop → connects to /mcp-connect (no OAuth, no browser)
 }
 ```
 
-> **Note:** Use `/mcp-connect` instead of `/6565/mcp` or `/7777/mcp`. The server assigns a session ID automatically — no OAuth browser flow is triggered.
-
 #### Usage
 
-On first use, Claude will automatically call the `login` tool and display the connection link. Click it, fill in the form (instance URL, OAuth Client ID, OAuth Client Secret), log in, and return to Claude. All tools are then available for the duration of the session (1 hour).
+On first use, Claude will automatically call the `login` tool and display the connection link. Click it, complete the form in your browser, log in, and return to Claude. All tools are then available for the duration of the session (1 hour).
 
 If the session expires, call the `login` tool again to reconnect.
 
@@ -714,6 +713,19 @@ su-mcp/
 ---
 
 ## Changelog
+
+### v2.0.0
+- Full OAuth 2.0 proxy flow with PKCE for Claude public directory listing (`/mcp` endpoint)
+- Tool-based login flow (`/mcp-connect`) — user clicks a link in chat to authenticate via browser
+- AES-256-GCM encrypted token storage with Redis (optional) or in-memory fallback
+- Dynamic client registration and auto-re-registration on unknown clients
+- Refresh token rotation with 24-day TTL
+- Rate limiting on auth and MCP endpoints
+- Security hardening: CSP headers, HSTS, PKCE validation, bearer token verification
+- OAuth configuration form with inline validation, SearchUnify branding, and setup docs link
+- Tool call logging with caller IP, endpoint, SU instance URL, and OAuth client ID
+- Multi-platform Docker image (`linux/amd64`, `linux/arm64`)
+- Server version now read from `package.json` (shows correctly in all transport modes)
 
 ### v1.3.0
 - Added `/mcp-connect` endpoint — tool-based login for environments where Claude Desktop cannot auto-open a browser
