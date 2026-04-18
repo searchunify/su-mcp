@@ -8,6 +8,7 @@ const initializeSearchClientsTools = async ({ server, creds, getCreds }) => {
     "Get list of all search clients configured in the SearchUnify instance. Returns minimal info: id, name, and uid for each search client.",
     {},
     {
+      title: "Get Search Clients",
       readOnlyHint: true,
       destructiveHint: false,
       openWorldHint: true,

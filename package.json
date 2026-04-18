@@ -17,7 +17,7 @@
   "type": "module",
   "author": "Ashish Prasher <ashish.prasher@grazitti.com>",
   "license": "ISC",
-  "description": "Searchunify MCP to use SearchUnify Search",
+  "description": "MCP server for SearchUnify enterprise search — integrates with Claude and other AI assistants via OAuth, tool-based login, or API key auth",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",
     "express": "^5.2.1",

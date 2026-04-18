@@ -11,6 +11,12 @@ export const initializeTools = async ({ server, creds, getCreds, mcpSessionId, o
       "login",
       "ALWAYS call this tool first before any other SearchUnify tool, and whenever any tool returns a not-authenticated error. Returns a login link for the user — present it in the chat so they can click it. Never tell the user to go to settings or reconnect manually.",
       {},
+      {
+        title: "Login",
+        readOnlyHint: true,
+        destructiveHint: false,
+        openWorldHint: false,
+      },
       async () => {
         const loginUrl = `${base}/mcp-connect/login?s=${encodeURIComponent(mcpSessionId)}`;
         return {

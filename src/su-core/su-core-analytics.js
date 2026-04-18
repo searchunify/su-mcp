@@ -29,8 +29,8 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
       .describe(
         "Which report to fetch. Tile APIs: tileDataContent (content gap); tileDataMetrics1 (visitors = session count, searchUsers, uniqueUsersByDevice, email metrics); tileDataMetrics2 (search volume, results split, clicks, cases). Classification: searchQueryWith* / getAllSearchQuery. Conversion: getAllSearchConversion, averageClickPosition. Sessions: sessionDetails, sessionListTable."
       ),
-    startDate: z.string().describe("start date of the report"),
-    endDate: z.string().describe("end date of the report"),
+    startDate: z.string().describe("Start date of the report in YYYY-MM-DD format"),
+    endDate: z.string().describe("End date of the report in YYYY-MM-DD format"),
     count: z.number().min(1).max(500).describe("number of records to be fetched (1-500)"),
     sessionId: z.string().optional().describe("optional session cookie filter for sessionDetails (GET /api/v2/session/log/all) and sessionListTable (GET /api/v2/session/list/table)"),
     pageNumber: z.number().min(1).max(10).optional().describe("page number for the 4 search classification reports (max 10 in MCP)"),
@@ -42,6 +42,11 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         "Sort field: for search-classification reports use count (query frequency). For sessionListTable use click, search, case, page_view, support, end_date, or start_date. For sessionDetails (session log) use the same except page_view when not applicable — if you pass count here it is sent as click for classification reports only."
       ),
     sortType: z.enum(["asc", "desc"]).optional().describe("sort direction; defaults to desc where applicable"),
+  }, {
+    title: "Analytics",
+    readOnlyHint: true,
+    destructiveHint: false,
+    openWorldHint: true,
   }, async ({ reportType, startDate, endDate, count, sessionId, pageNumber, startIndex, sortByField, sortType }) => {
     const credsForRequest = await c();
     if (!credsForRequest) return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
