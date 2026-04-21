@@ -4,12 +4,13 @@ import {
   normalizeSdkResult,
 } from "./business-query-helpers.js";
 
+/** Stable `recipeId` values (no internal question codes in the API surface). */
 const RECIPES = {
-  Q11_traffic: "Q11_traffic",
-  Q12_search_no_click_pct: "Q12_search_no_click_pct",
-  Q5_relevance_rate: "Q5_relevance_rate",
-  Q13_content_gap: "Q13_content_gap",
-  Q4_self_solve_rate: "Q4_self_solve_rate",
+  traffic: "traffic",
+  search_no_click_pct: "search_no_click_pct",
+  relevance_rate: "relevance_rate",
+  content_gap: "content_gap",
+  self_solve_rate: "self_solve_rate",
 };
 
 const internalUserZ = z
@@ -47,47 +48,47 @@ const businessQueryInput = baseContext.extend({
     .min(1)
     .max(500)
     .optional()
-    .describe("Q12 only: `count` for both classification APIs (default 500)."),
+    .describe("`search_no_click_pct` only: `count` for both classification APIs (default 500)."),
   pageNumber: z
     .number()
     .min(1)
     .max(10)
     .optional()
-    .describe("Q12: pageNumber (default 1)."),
-  sortByField: z.enum(["count"]).optional().describe("Q12: default count."),
-  sortType: z.enum(["asc", "desc"]).optional().describe("Q12: default desc."),
+    .describe("search_no_click_pct: pageNumber (default 1)."),
+  sortByField: z.enum(["count"]).optional().describe("search_no_click_pct: default count."),
+  sortType: z.enum(["asc", "desc"]).optional().describe("search_no_click_pct: default desc."),
   includeRelevanceDrilldown: z
     .boolean()
     .optional()
-    .describe("Q5: also call POST /conversion/relevance-index."),
+    .describe("relevance_rate: also call POST /conversion/relevance-index."),
   relevanceFrom: z
     .string()
     .optional()
-    .describe("Q5 drilldown: optional from (server uses quarters if omitted)."),
+    .describe("relevance_rate drilldown: optional from (server uses quarters if omitted)."),
   relevanceTo: z
     .string()
     .optional()
-    .describe("Q5 drilldown: optional to."),
+    .describe("relevance_rate drilldown: optional to."),
   includeLeadershipQuarterly: z
     .boolean()
     .optional()
     .describe(
-      "Q4: also call leadership USSV + ASSV (requires `instance` to route through admin or another proxy that adds `analytics-secret` upstream to analytics)."
+      "self_solve_rate: also call leadership USSV + ASSV (requires `instance` to route through admin or another proxy that adds `analytics-secret` upstream to analytics)."
     ),
   leadershipFrom: z
     .string()
     .optional()
     .describe(
-      "Q4 leadership: optional explicit from (else server default quarters)."
+      "self_solve_rate leadership: optional explicit from (else server default quarters)."
     ),
   leadershipTo: z
     .string()
     .optional()
-    .describe("Q4 leadership: optional explicit to."),
+    .describe("self_solve_rate leadership: optional explicit to."),
   directlyViewSetting: z
     .boolean()
     .optional()
-    .describe("Q4 USSV: maps to `directlyViewSetting` on leadership API."),
+    .describe("self_solve_rate USSV: maps to `directlyViewSetting` on leadership API."),
 });
 
 function tileOverviewParams(input, creds) {
@@ -149,7 +150,7 @@ function jsonResult(obj) {
   };
 }
 
-async function runQ11(input, creds) {
+async function runTrafficRecipe(input, creds) {
   const A = creds.suRestClient.Analytics();
   const t = tileOverviewParams(input, creds);
   const [tiles, m1, m2] = await Promise.all([
@@ -161,9 +162,9 @@ async function runQ11(input, creds) {
   const rM1 = normalizeSdkResult(m1);
   const rM2 = normalizeSdkResult(m2);
   return {
-    recipeId: RECIPES.Q11_traffic,
+    recipeId: RECIPES.traffic,
     summary:
-      "Traffic (Q11): overview tiles + tileDataMetrics1 (visitors/sessions) + tileDataMetrics2 (searches, clicks, cases). Prefer metrics2 for search/click volumes.",
+      "Traffic overview: tiles plus tileDataMetrics1 (visitors/sessions) and tileDataMetrics2 (searches, clicks, cases). Prefer metrics2 for search and click volumes.",
     subcalls: [
       { id: "getTileData", ...rTiles, data: rTiles.ok ? rTiles.data : undefined },
       { id: "tileDataMetrics1", ...rM1, data: rM1.ok ? rM1.data : undefined },
@@ -172,7 +173,7 @@ async function runQ11(input, creds) {
   };
 }
 
-async function runQ12(input, creds) {
+async function runSearchNoClickPctRecipe(input, creds) {
   const A = creds.suRestClient.Analytics();
   const searchClientId = input.uid ?? creds.config.uid;
   const count = input.classificationCount ?? 500;
@@ -200,9 +201,9 @@ async function runQ12(input, creds) {
       ? computeSearchNoClickRatio(rN.data, rW.data)
       : null;
   return {
-    recipeId: RECIPES.Q12_search_no_click_pct,
+    recipeId: RECIPES.search_no_click_pct,
     summary:
-      "Q12: ratio from summed `count` on the returned pages of withNoClicks vs withResults (same filters). Not a guaranteed global total unless `classificationCount` covers all rows.",
+      "Search-without-click ratio from summed `count` on the returned pages of withNoClicks vs withResults (same filters). Not a guaranteed global total unless `classificationCount` covers all rows.",
     classificationQuery: q,
     subcalls: [
       { id: "withNoClicks", ...rN, data: rN.ok ? rN.data : undefined },
@@ -212,7 +213,7 @@ async function runQ12(input, creds) {
   };
 }
 
-async function runQ5(input, creds) {
+async function runRelevanceRateRecipe(input, creds) {
   const A = creds.suRestClient.Analytics();
   const body = {
     tenantId: input.tenantId,
@@ -222,9 +223,9 @@ async function runQ5(input, creds) {
   const current = await A.postCurrentRelevanceIndex(body);
   const r = normalizeSdkResult(current);
   const out = {
-    recipeId: RECIPES.Q5_relevance_rate,
+    recipeId: RECIPES.relevance_rate,
     summary:
-      "Q5 primary: POST /conversion/current-relevance-index (rolling window on server). Optional drill-down: set includeRelevanceDrilldown true for POST /conversion/relevance-index.",
+      "Relevance: current index from POST /conversion/current-relevance-index (rolling window on server). Optional drill-down: set includeRelevanceDrilldown true for POST /conversion/relevance-index.",
     subcalls: [{ id: "currentRelevanceIndex", ...r, data: r.ok ? r.data : undefined }],
   };
   if (input.includeRelevanceDrilldown) {
@@ -243,27 +244,28 @@ async function runQ5(input, creds) {
   return out;
 }
 
-async function runQ13(input, creds) {
+async function runContentGapRecipe(input, creds) {
   const A = creds.suRestClient.Analytics();
   const t = tileOverviewParams(input, creds);
   const res = await A.getTileDataContent(t);
   const r = normalizeSdkResult(res);
   return {
-    recipeId: RECIPES.Q13_content_gap,
-    summary: "Q13: POST /api/v2/content/tileDataContent (content-gap style metrics).",
+    recipeId: RECIPES.content_gap,
+    summary:
+      "Content gap metrics from POST /api/v2/content/tileDataContent (failed searches, no-click, no-result, and related aggregates as returned by the API).",
     subcalls: [{ id: "tileDataContent", ...r, data: r.ok ? r.data : undefined }],
   };
 }
 
-async function runQ4(input, creds) {
+async function runSelfSolveRateRecipe(input, creds) {
   const A = creds.suRestClient.Analytics();
   const stageBody = conversionSessionBody(input, creds);
   const stage1 = await A.postCaseDeflectionStage1(stageBody);
   const r1 = normalizeSdkResult(stage1);
   const out = {
-    recipeId: RECIPES.Q4_self_solve_rate,
+    recipeId: RECIPES.self_solve_rate,
     summary:
-      "Q4: primary self-solve signal from POST /conversion/caseDeflectionStage1 (stage 1). Optional quarterly USSV/ASSV from /leadership/* when includeLeadershipQuarterly is true (requires traffic through admin or another BFF that injects `analytics-secret` on upstream analytics calls).",
+      "Self-solve: primary signal from POST /conversion/caseDeflectionStage1 (stage 1). Optional quarterly USSV/ASSV from /leadership/* when includeLeadershipQuarterly is true (requires traffic through admin or another BFF that injects `analytics-secret` on upstream analytics calls).",
     definitions: {
       primary: "Stage-1 session analytics (conversion.caseDeflectionStage1).",
       secondary:
@@ -309,7 +311,7 @@ export const initializeExecutiveBusinessQueryTools = async ({
 
   server.tool(
     "executive_business_query",
-    "Phase 1 executive analytics recipes (Q11 traffic, Q12 search-without-click %, Q5 relevance, Q13 content gap, Q4 self-solve). Composes existing SearchUnify analytics HTTP APIs only — response JSON shapes are unchanged. `/leadership/*` subcalls succeed when `instance` hits a platform path (e.g. admin) that adds `analytics-secret` to analytics; direct analytics URLs may return 401 for leadership. See analytics/docs/business-queries/ for formulas and runbooks.",
+    "Executive analytics recipes: traffic, search-without-click rate, relevance, content gap, self-solve. Composes existing SearchUnify analytics HTTP APIs only — response JSON shapes are unchanged. `/leadership/*` subcalls succeed when `instance` hits a platform path (e.g. admin) that adds `analytics-secret` to analytics; direct analytics URLs may return 401 for leadership. See analytics/docs/business-queries/ for formulas and runbooks.",
     businessQueryInput.shape,
     async (args) => {
       const credsForRequest = c();
@@ -317,20 +319,20 @@ export const initializeExecutiveBusinessQueryTools = async ({
       try {
         let payload;
         switch (recipeId) {
-          case RECIPES.Q11_traffic:
-            payload = await runQ11(input, credsForRequest);
+          case RECIPES.traffic:
+            payload = await runTrafficRecipe(input, credsForRequest);
             break;
-          case RECIPES.Q12_search_no_click_pct:
-            payload = await runQ12(input, credsForRequest);
+          case RECIPES.search_no_click_pct:
+            payload = await runSearchNoClickPctRecipe(input, credsForRequest);
             break;
-          case RECIPES.Q5_relevance_rate:
-            payload = await runQ5(input, credsForRequest);
+          case RECIPES.relevance_rate:
+            payload = await runRelevanceRateRecipe(input, credsForRequest);
             break;
-          case RECIPES.Q13_content_gap:
-            payload = await runQ13(input, credsForRequest);
+          case RECIPES.content_gap:
+            payload = await runContentGapRecipe(input, credsForRequest);
             break;
-          case RECIPES.Q4_self_solve_rate:
-            payload = await runQ4(input, credsForRequest);
+          case RECIPES.self_solve_rate:
+            payload = await runSelfSolveRateRecipe(input, credsForRequest);
             break;
           default:
             return jsonResult({ error: "unknown recipeId", recipeId });

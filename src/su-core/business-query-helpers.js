@@ -1,5 +1,5 @@
 /**
- * Helpers for Phase 1 executive business-query orchestration (Q4, Q5, Q11–Q13).
+ * Helpers for executive business-query orchestration (traffic, relevance, self-solve, etc.).
  * Pure functions — safe to unit test without live analytics.
  */
 
@@ -17,7 +17,7 @@ export function sumClassificationCounts(rows) {
 }
 
 /**
- * Q12 helper: same query context on both endpoints; ratio uses summed counts on returned pages only.
+ * Search-no-click ratio: same query context on both endpoints; ratio uses summed counts on returned pages only.
  * When `count` is below total distinct queries, this is a lower-bound / slice metric, not a global total.
  */
 export function computeSearchNoClickRatio(withNoClicksRows, withResultsRows) {
