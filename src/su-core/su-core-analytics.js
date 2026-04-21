@@ -1,5 +1,12 @@
 import { z } from "zod";
 import { formatForClaude } from "./../utils.js";
+import {
+  runTrafficRecipe,
+  runSearchNoClickPctRecipe,
+  runRelevanceRateRecipe,
+  runContentGapRecipe,
+  runSelfSolveRateRecipe,
+} from "./su-core-business-queries.js";
 
 const reportTypes = {
   searchQueryWithNoClicks: "searchQueryWithNoClicks",
@@ -16,18 +23,51 @@ const reportTypes = {
   tileDataMetrics1: "tileDataMetrics1",
   /** POST /api/v2/overview/tileDataMetrics2 — searches, clicks, cases, withResult/withoutResult, uniqueSearches */
   tileDataMetrics2: "tileDataMetrics2",
+  /** Same orchestration as `executive_business_query` recipe `traffic` */
+  traffic: "traffic",
+  /** Same as `executive_business_query` recipe `search_no_click_pct` */
+  search_no_click_pct: "search_no_click_pct",
+  /** Same as `executive_business_query` recipe `relevance_rate` */
+  relevance_rate: "relevance_rate",
+  /** Same as `executive_business_query` recipe `content_gap` */
+  content_gap: "content_gap",
+  /** Same as `executive_business_query` recipe `self_solve_rate` */
+  self_solve_rate: "self_solve_rate",
 };
+
+/** Map flat `analytics` tool args to executive runner input (dates + pagination only; tenant comes from creds inside runners). */
+function liteExecutiveInput(args) {
+  return {
+    from: args.startDate,
+    to: args.endDate,
+    classificationCount: args.count,
+    pageNumber: args.pageNumber,
+    sortByField: args.sortByField,
+    sortType: args.sortType,
+  };
+}
+
+function jsonTextResult(obj) {
+  return {
+    content: [
+      {
+        type: "text",
+        text: JSON.stringify(obj, null, 2),
+      },
+    ],
+  };
+}
 
 const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
   const c = () => (getCreds ? getCreds() : creds);
   server.tool(
     "analytics",
-    "Analytics reports from SearchUnify. For headline/count questions: tileDataContent = content-gap metrics (failed searches, no-click, no-result, sessions, daily averages). tileDataMetrics1 = session/visitor tile: the API field `visitors` is the session count (also exposed as `sessionCount` in MCP output); plus searchUsers, uniqueUsersByDevice, emptyEmailSessionCount, uniqueUsersByEmail. Ignore undefined placeholders for click/search/case fields on this endpoint. tileDataMetrics2 = search/click/conversion metrics (searches, withResult, withoutResult, uniqueSearches, clicks, clickedSessions, caseCount). Do not use tileDataMetrics1 for searches, clicks, cases, or with/without result — use tileDataMetrics2.",
+    "Analytics reports from SearchUnify. For headline/count questions: tileDataContent = content-gap metrics (failed searches, no-click, no-result, sessions, daily averages). tileDataMetrics1 = session/visitor tile: the API field `visitors` is the session count (also exposed as `sessionCount` in MCP output); plus searchUsers, uniqueUsersByDevice, emptyEmailSessionCount, uniqueUsersByEmail. Ignore undefined placeholders for click/search/case fields on this endpoint. tileDataMetrics2 = search/click/conversion metrics (searches, withResult, withoutResult, uniqueSearches, clicks, clickedSessions, caseCount). Do not use tileDataMetrics1 for searches, clicks, cases, or with/without result — use tileDataMetrics2. Executive-style orchestrations (same payloads as `executive_business_query`): reportType `traffic`, `search_no_click_pct`, `relevance_rate`, `content_gap`, `self_solve_rate` — use startDate/endDate; creds supply search-client uid only. Tenant is resolved by the host (e.g. admin `tenant-id` from the access token), not in tool args or analytics JSON bodies.",
     {
     reportType: z
       .enum(Object.values(reportTypes))
       .describe(
-        "Which report to fetch. Tile APIs: tileDataContent (content gap); tileDataMetrics1 (visitors = session count, searchUsers, uniqueUsersByDevice, email metrics); tileDataMetrics2 (search volume, results split, clicks, cases). Classification: searchQueryWith* / getAllSearchQuery. Conversion: getAllSearchConversion, averageClickPosition. Sessions: sessionDetails, sessionListTable."
+        "Which report to fetch. Tile: tileDataContent, tileDataMetrics1, tileDataMetrics2. Classification: searchQueryWith* / getAllSearchQuery. Conversion: getAllSearchConversion, averageClickPosition. Sessions: sessionDetails, sessionListTable. Executive orchestrations (JSON body same shape as executive_business_query): traffic, search_no_click_pct, relevance_rate, content_gap, self_solve_rate."
       ),
     startDate: z.string().describe("start date of the report"),
     endDate: z.string().describe("end date of the report"),
@@ -42,9 +82,60 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         "Sort field: for search-classification reports use count (query frequency). For sessionListTable use click, search, case, page_view, support, end_date, or start_date. For sessionDetails (session log) use the same except page_view when not applicable — if you pass count here it is sent as click for classification reports only."
       ),
     sortType: z.enum(["asc", "desc"]).optional().describe("sort direction; defaults to desc where applicable"),
-  }, async ({ reportType, startDate, endDate, count, sessionId, pageNumber, startIndex, sortByField, sortType }) => {
+  }, async (args) => {
+    const {
+      reportType,
+      startDate,
+      endDate,
+      count,
+      sessionId,
+      pageNumber,
+      startIndex,
+      sortByField,
+      sortType,
+    } = args;
     const credsForRequest = c();
     const Analytics = credsForRequest.suRestClient.Analytics();
+
+    const executiveReportTypes = new Set([
+      reportTypes.traffic,
+      reportTypes.search_no_click_pct,
+      reportTypes.relevance_rate,
+      reportTypes.content_gap,
+      reportTypes.self_solve_rate,
+    ]);
+    if (executiveReportTypes.has(reportType)) {
+      try {
+        const input = liteExecutiveInput(args);
+        let payload;
+        switch (reportType) {
+          case reportTypes.traffic:
+            payload = await runTrafficRecipe(input, credsForRequest);
+            break;
+          case reportTypes.search_no_click_pct:
+            payload = await runSearchNoClickPctRecipe(input, credsForRequest);
+            break;
+          case reportTypes.relevance_rate:
+            payload = await runRelevanceRateRecipe(input, credsForRequest);
+            break;
+          case reportTypes.content_gap:
+            payload = await runContentGapRecipe(input, credsForRequest);
+            break;
+          case reportTypes.self_solve_rate:
+            payload = await runSelfSolveRateRecipe(input, credsForRequest);
+            break;
+          default:
+            payload = { error: "unreachable", reportType };
+        }
+        return jsonTextResult(payload);
+      } catch (e) {
+        return jsonTextResult({
+          error: e?.message ?? String(e),
+          reportType,
+        });
+      }
+    }
+
     let analyticsResponse = {};
     switch(reportType){
       case reportTypes.searchQueryWithNoClicks:
@@ -105,7 +196,6 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           searchClientId: credsForRequest.config.uid,
           startDate,
           endDate,
-          tenantId: credsForRequest.config.tenantId,
           internalUser: 'all',
         });
         break;

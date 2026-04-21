@@ -19,7 +19,6 @@ const internalUserZ = z
   .describe("Maps to analytics `internalUser` (default all).");
 
 const baseContext = z.object({
-  tenantId: z.string().uuid().describe("Tenant UUID."),
   from: z
     .string()
     .describe("Range start YYYY-MM-DD (inclusive for most APIs)."),
@@ -60,7 +59,7 @@ const businessQueryInput = baseContext.extend({
   includeRelevanceDrilldown: z
     .boolean()
     .optional()
-    .describe("relevance_rate: also call POST /conversion/relevance-index."),
+    .describe("relevance_rate: also call POST /api/v2/conversion/relevance-index."),
   relevanceFrom: z
     .string()
     .optional()
@@ -97,7 +96,6 @@ function tileOverviewParams(input, creds) {
     endDate: input.to,
     searchClientId: input.uid ?? creds.config.uid,
     ecoSystemId: input.ecoId,
-    tenantId: input.tenantId,
     internalUser: input.internalUser ?? "all",
     userMetricsFlag: input.userMetricsFlag,
     userMetricsFilters: input.userMetricsFilters,
@@ -110,7 +108,6 @@ function conversionSessionBody(input, creds) {
   const body = {
     from: `${input.from} 00:00:00`,
     to: `${input.to} 23:59:59`,
-    tenantId: input.tenantId,
     internalUser: input.internalUser ?? "all",
     userMetricsFlag: input.userMetricsFlag,
     userMetricsFilters: input.userMetricsFilters,
@@ -128,7 +125,6 @@ function conversionSessionBody(input, creds) {
 
 function leadershipVolumeBody(input, creds) {
   const base = {
-    tenantId: input.tenantId,
     internalUser: input.internalUser ?? "all",
     from: input.leadershipFrom,
     to: input.leadershipTo,
@@ -216,7 +212,6 @@ async function runSearchNoClickPctRecipe(input, creds) {
 async function runRelevanceRateRecipe(input, creds) {
   const A = creds.suRestClient.Analytics();
   const body = {
-    tenantId: input.tenantId,
     uid: input.uid ?? creds.config.uid,
     internalUser: input.internalUser ?? "all",
   };
@@ -225,7 +220,7 @@ async function runRelevanceRateRecipe(input, creds) {
   const out = {
     recipeId: RECIPES.relevance_rate,
     summary:
-      "Relevance: current index from POST /conversion/current-relevance-index (rolling window on server). Optional drill-down: set includeRelevanceDrilldown true for POST /conversion/relevance-index.",
+      "Relevance: current index from POST /api/v2/conversion/current-relevance-index (rolling window on server). Optional drill-down: set includeRelevanceDrilldown true for POST /api/v2/conversion/relevance-index.",
     subcalls: [{ id: "currentRelevanceIndex", ...r, data: r.ok ? r.data : undefined }],
   };
   if (input.includeRelevanceDrilldown) {
@@ -265,7 +260,7 @@ async function runSelfSolveRateRecipe(input, creds) {
   const out = {
     recipeId: RECIPES.self_solve_rate,
     summary:
-      "Self-solve: primary signal from POST /conversion/caseDeflectionStage1 (stage 1). Optional quarterly USSV/ASSV from /leadership/* when includeLeadershipQuarterly is true (requires traffic through admin or another BFF that injects `analytics-secret` on upstream analytics calls).",
+      "Self-solve: primary signal from POST /api/v2/conversion/caseDeflectionStage1 (stage 1). Optional quarterly USSV/ASSV from /leadership/* when includeLeadershipQuarterly is true (requires traffic through admin or another BFF that injects `analytics-secret` on upstream analytics calls).",
     definitions: {
       primary: "Stage-1 session analytics (conversion.caseDeflectionStage1).",
       secondary:
@@ -301,6 +296,15 @@ async function runSelfSolveRateRecipe(input, creds) {
   }
   return out;
 }
+
+export {
+  RECIPES,
+  runTrafficRecipe,
+  runSearchNoClickPctRecipe,
+  runRelevanceRateRecipe,
+  runContentGapRecipe,
+  runSelfSolveRateRecipe,
+};
 
 export const initializeExecutiveBusinessQueryTools = async ({
   server,
