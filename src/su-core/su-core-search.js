@@ -7,17 +7,23 @@ const aggregationSchema = z.object({
 });
 
 const initializeSearchTools = async ({ server, creds, getCreds }) => {
-  const credsForRequest = () => (getCreds ? getCreds() : creds);
+  const credsForRequest = async () => (getCreds ? await getCreds() : creds);
   server.tool("search", "Get relevant search results for a search query using SearchUnify. Optionally pass aggregations (facets) from get-filter-options to filter results.", {
-    searchString: z.string().min(3).max(100).describe("search query, its a string can be a single word or a sentence"),
+    searchString: z.string().min(3).max(100).describe("Search query (3–100 characters)"),
     aggregations: z.array(aggregationSchema).optional().describe("optional list of facet filters (e.g. from get-filter-options) to narrow results by category, source, etc."),
     page: z.number().int().min(1).max(100).optional().describe("page number for pagination, starts from 1"),
     pageSize: z.number().int().min(1).max(100).optional().describe("number of results per page, default is 10"),
     sortBy: z.enum(["_score", "post_time"]).optional().describe("field to sort results by, e.g. _score or post_time"),
-    versionResults: z.boolean().default(false).optional().describe("This field speicifies whether to use versioning or not. Default value is true."),
+    versionResults: z.boolean().default(false).optional().describe("Whether to use versioning for results. Defaults to false."),
     // sortOrder: z.enum(["asc", "desc"]).optional().describe("sort order for results, asc or desc"),
+  }, {
+    title: "Search",
+    readOnlyHint: true,
+    destructiveHint: false,
+    openWorldHint: true,
   }, async ({ searchString, aggregations, page, pageSize, sortBy, versionResults }) => {
-    const c = credsForRequest();
+    const c = await credsForRequest();
+    if (!c) return { content: [{ type: "text", text: "Not authenticated. Please call the login tool first." }] };
     const Search = c.suRestClient.Search();
     //const requestParams = { uid: c.config.uid, searchString };
     
@@ -40,8 +46,6 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       requestParams.aggregations = aggregations.map((a) => ({ type: a.type, filter: [a.filter] }));
     }
 
-    console.error("[INFO] - Request parameters being sent to search API : ", JSON.stringify(requestParams));
-    
     const searchResponse = await Search.getSearchResults(requestParams);
 
     if(!searchResponse?.data){
@@ -51,11 +55,8 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       }
     }
     const gptActive = searchResponse?.data?.searchClientSettings?.gptConfig?.gptActive;
-    console.error('[INFO] - gptActive',gptActive);
     if(gptActive){
       const contexts = searchResponse.data.searchClientSettings.gptConfig.gptContext.split("_SULLM_");
-
-      console.error('[INFO] - Number of gpt contexts received from Search: ', contexts?.length);
 
       for(let i = 0; i < contexts.length; i++) {
         if(searchResponse.data.searchClientSettings.gptConfig.gptLinks[i - 1]){
@@ -65,8 +66,6 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       return formatForClaude(searchResponse.data.searchClientSettings.gptConfig.gptLinks); 
     } else {
       const contexts = [];
-      
-      console.error('[INFO] - Number of search hits received in response: ', searchResponse.data?.result?.hits?.length);
       
       for(let i = 0; i < searchResponse.data?.result?.hits?.length; i++){
         contexts.push({
@@ -88,8 +87,15 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       searchString: z.string().min(3).max(100).describe("search query, a single word or sentence"),
       aggregations: z.array(aggregationSchema).optional().describe("optional list of current filters to get filter options in context of filtered results"),
     },
+    {
+      title: "Get Filter Options",
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: true,
+    },
     async ({ searchString, aggregations }) => {
-      const c = credsForRequest();
+      const c = await credsForRequest();
+      if (!c) return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
       const Search = c.suRestClient.Search();
       const requestParams = { uid: c.config.uid, searchString };
       if (aggregations?.length) {

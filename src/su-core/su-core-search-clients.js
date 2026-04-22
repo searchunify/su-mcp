@@ -1,14 +1,21 @@
 import { formatForClaude } from "./../utils.js";
 
 const initializeSearchClientsTools = async ({ server, creds, getCreds }) => {
-  const credsForRequest = () => (getCreds ? getCreds() : creds);
+  const credsForRequest = async () => (getCreds ? await getCreds() : creds);
 
   server.tool(
     "get-search-clients",
     "Get list of all search clients configured in the SearchUnify instance. Returns minimal info: id, name, and uid for each search client.",
     {},
+    {
+      title: "Get Search Clients",
+      readOnlyHint: true,
+      destructiveHint: false,
+      openWorldHint: true,
+    },
     async () => {
-      const c = credsForRequest();
+      const c = await credsForRequest();
+      if (!c) return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
       const SearchClients = c.suRestClient.SearchClients();
       const response = await SearchClients.getSearchClients();
 

@@ -58,7 +58,6 @@ const HEADER_PREFIX = 'searchunify-';
  * Header names (lowercase): searchunify-instance, searchunify-uid, searchunify-auth-type, searchunify-api-key, etc.
  */
 function getCredsFromHeaders(headers) {
-  console.log('getCredsFromHeaders headers', headers);
   const get = (k) => headers[HEADER_PREFIX + k];
   const instance = get('instance')?.trim();
   const uid = get('uid')?.trim();
@@ -106,4 +105,25 @@ function getCredsFromHeaders(headers) {
   return { suRestClient, config };
 }
 
-export { validateCreds, getCredsFromHeaders };
+/**
+ * Build creds from SU OAuth tokens (used by OAuth proxy flow).
+ * Uses the MCP server's SU OAuth client credentials (SU_MCP_CLIENT_ID/SECRET)
+ * to create an SDK client with clientCredentials auth. The SDK will auto-generate
+ * tokens using these credentials on each request.
+ * @param {Object} suTokens - { accessToken, refreshToken, instanceUrl }
+ */
+function buildCredsFromSuToken(suTokens) {
+  const { instanceUrl, suClientId, suClientSecret, uid } = suTokens;
+  const suRestClient = new SearchUnifyRestClient({
+    instance: instanceUrl,
+    timeout: parseInt(process.env.SU_TIMEOUT || "60000", 10),
+    authType: "clientCredentials",
+    oauth2: {
+      clientId: suClientId,
+      clientSecret: suClientSecret,
+    },
+  });
+  return { suRestClient, config: { instance: instanceUrl, uid } };
+}
+
+export { validateCreds, getCredsFromHeaders, buildCredsFromSuToken };

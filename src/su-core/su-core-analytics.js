@@ -59,7 +59,7 @@ function jsonTextResult(obj) {
 }
 
 const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
-  const c = () => (getCreds ? getCreds() : creds);
+  const c = async () => (getCreds ? await getCreds() : creds);
   server.tool(
     "analytics",
     "Analytics reports from SearchUnify. For headline/count questions: tileDataContent = content-gap metrics (failed searches, no-click, no-result, sessions, daily averages). tileDataMetrics1 = session/visitor tile: the API field `visitors` is the session count (also exposed as `sessionCount` in MCP output); plus searchUsers, uniqueUsersByDevice, emptyEmailSessionCount, uniqueUsersByEmail. Ignore undefined placeholders for click/search/case fields on this endpoint. tileDataMetrics2 = search/click/conversion metrics (searches, withResult, withoutResult, uniqueSearches, clicks, clickedSessions, caseCount). Do not use tileDataMetrics1 for searches, clicks, cases, or with/without result — use tileDataMetrics2. Executive-style orchestrations (same payloads as `executive_business_query`): reportType `traffic`, `search_no_click_pct`, `relevance_rate`, `content_gap`, `self_solve_rate` — use startDate/endDate; creds supply search-client uid only. Tenant is resolved by the host (e.g. admin `tenant-id` from the access token), not in tool args or analytics JSON bodies.",
@@ -69,8 +69,8 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
       .describe(
         "Which report to fetch. Tile: tileDataContent, tileDataMetrics1, tileDataMetrics2. Classification: searchQueryWith* / getAllSearchQuery. Conversion: getAllSearchConversion, averageClickPosition. Sessions: sessionDetails, sessionListTable. Executive orchestrations (JSON body same shape as executive_business_query): traffic, search_no_click_pct, relevance_rate, content_gap, self_solve_rate."
       ),
-    startDate: z.string().describe("start date of the report"),
-    endDate: z.string().describe("end date of the report"),
+    startDate: z.string().describe("Start date of the report in YYYY-MM-DD format"),
+    endDate: z.string().describe("End date of the report in YYYY-MM-DD format"),
     count: z.number().min(1).max(500).describe("number of records to be fetched (1-500)"),
     sessionId: z.string().optional().describe("optional session cookie filter for sessionDetails (GET /api/v2/session/log/all) and sessionListTable (GET /api/v2/session/list/table)"),
     pageNumber: z.number().min(1).max(10).optional().describe("page number for the 4 search classification reports (max 10 in MCP)"),
@@ -82,6 +82,11 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         "Sort field: for search-classification reports use count (query frequency). For sessionListTable use click, search, case, page_view, support, end_date, or start_date. For sessionDetails (session log) use the same except page_view when not applicable — if you pass count here it is sent as click for classification reports only."
       ),
     sortType: z.enum(["asc", "desc"]).optional().describe("sort direction; defaults to desc where applicable"),
+  }, {
+    title: "Analytics",
+    readOnlyHint: true,
+    destructiveHint: false,
+    openWorldHint: true,
   }, async (args) => {
     const {
       reportType,
@@ -94,7 +99,8 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
       sortByField,
       sortType,
     } = args;
-    const credsForRequest = c();
+    const credsForRequest = await c();
+    if (!credsForRequest) return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
     const Analytics = credsForRequest.suRestClient.Analytics();
 
     const executiveReportTypes = new Set([
