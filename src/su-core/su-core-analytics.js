@@ -36,6 +36,22 @@ const baseReportTypes = {
   tileDataMetrics1: "tileDataMetrics1",
   /** POST /api/v2/overview/tileDataMetrics2 — searches, clicks, cases, withResult/withoutResult, uniqueSearches */
   tileDataMetrics2: "tileDataMetrics2",
+  /** POST /api/v2/overview/searchClickPosition — Click Position Report (uid from auth; no tenantId). */
+  overviewSearchClickPosition: "overviewSearchClickPosition",
+  /** POST /api/v2/overview/createdCases — Cases Created */
+  overviewCreatedCases: "overviewCreatedCases",
+  /** POST /api/v2/overview/featuredSnippet — Top Rated Featured Results */
+  overviewFeaturedSnippet: "overviewFeaturedSnippet",
+  /** POST /api/v2/overview/knowledgeTitle — Top Knowledge Graph Titles */
+  overviewKnowledgeTitle: "overviewKnowledgeTitle",
+  /** POST /api/v2/overview/pageRating — Content Experience Feedback */
+  overviewPageRating: "overviewPageRating",
+  /** POST /api/v2/overview/searchFeedback — Search Experience Feedback */
+  overviewSearchFeedback: "overviewSearchFeedback",
+  /** POST /api/v2/overview/advertisements — Advertisement Performance Report */
+  overviewAdvertisements: "overviewAdvertisements",
+  /** POST /api/v2/llm/llm-response-feedback — SearchUnifyGPT Feedback */
+  llmResponseFeedback: "llmResponseFeedback",
 };
 
 const reportTypes = {
@@ -100,6 +116,22 @@ function jsonTextResult(obj) {
   };
 }
 
+/** Scope params like session list: uid from creds unless ecosystem. Never includes tenantId. */
+function scopeParamsForOverview(args, credsForRequest) {
+  const { startDate, endDate, count, pageNumber, internalUser, ecoSystemId } = args;
+  const base = {
+    startDate,
+    endDate,
+    count,
+    pageNumber,
+    internalUser: internalUser ?? "all",
+  };
+  if (ecoSystemId) {
+    return { ...base, ecoSystemId };
+  }
+  return { ...base, searchClientId: credsForRequest.config.uid };
+}
+
 const allReportTypeEnumValues = Object.values(reportTypes);
 
 const reportTypeZodDescription = ENABLE_EXECUTIVE_RECIPE_REPORTS
@@ -132,6 +164,34 @@ const baseAnalyticsFieldShape = {
     .enum(["count", "click", "search", "case", "page_view", "support", "end_date", "start_date"])
     .optional(),
   sortType: z.enum(["asc", "desc"]).optional(),
+  internalUser: z
+    .enum(["all", "internal", "external", "externalOnly"])
+    .optional()
+    .describe("Overview / LLM mirrors: maps to analytics internalUser (default all)."),
+  ecoSystemId: z
+    .string()
+    .uuid()
+    .optional()
+    .describe("When set, scope requests with ecoId instead of uid (mutually exclusive with creds uid on the wire)."),
+  searchQuery: z
+    .string()
+    .optional()
+    .describe("Click Position Report and SearchUnifyGPT Feedback: search text filter (default empty)."),
+  reactionFilterType: z
+    .union([z.enum(["all", "true", "false", "0", "1"]), z.boolean()])
+    .optional()
+    .describe("SearchUnifyGPT Feedback: reaction filter (default all)."),
+  sortingField: z
+    .string()
+    .optional()
+    .describe("Click Position Report: column to sort by (default click)."),
+  casesCaseUid: z.string().optional().describe("Cases Created: SearchUnify case id filter."),
+  casesCaseSubject: z.string().optional().describe("Cases Created: case title filter."),
+  casesSessionCookie: z.string().optional().describe("Cases Created: session id filter."),
+  casesEmailId: z.string().optional().describe("Cases Created: email filter."),
+  isAscending: z.boolean().optional().describe("Cases Created: sort direction for case list (default true)."),
+  searchKey: z.string().optional().describe("Advertisement Performance: search_key filter."),
+  advertisementSortType: z.string().optional().describe("Advertisement Performance: sort_type."),
 };
 
 const analyticsInputSchema = ENABLE_EXECUTIVE_RECIPE_REPORTS
@@ -139,8 +199,8 @@ const analyticsInputSchema = ENABLE_EXECUTIVE_RECIPE_REPORTS
   : z.object(baseAnalyticsFieldShape);
 
 const analyticsToolDescription = ENABLE_EXECUTIVE_RECIPE_REPORTS
-  ? "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, search classification, conversion, sessions. **Executive orchestrations (same as `executive_business_query`):** all `reportType` values in Phase 1 (traffic, search_no_click_pct, … self_solve_rate), Phase 2 (roi_case_deflection, savings_from_conversion, cases_without_self_service, direct_views_case_creation, stage2_deflection), Phase 3 (article_deflection_contrast, attach_article_case_journey, community_content_ctr, top_article_driven_cases_month, su_gpt_attribution_deferred) — use startDate/endDate. Extra executive fields (e.g. costPerCase, communityNameHints) match the executive tool. MCP does not send `tenantId` on requests (same wire shape as non-executive analytics routes)."
-  : "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, search classification, conversion, sessions. Executive recipe orchestrations are not available as `reportType` here; use the `executive_business_query` tool for those. MCP does not send `tenantId` on requests.";
+  ? "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, search classification, conversion, sessions, **Overview tab** (overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **Executive orchestrations (same as `executive_business_query`):** all `reportType` values in Phase 1 (traffic, search_no_click_pct, … self_solve_rate), Phase 2 (roi_case_deflection, savings_from_conversion, cases_without_self_service, direct_views_case_creation, stage2_deflection), Phase 3 (article_deflection_contrast, attach_article_case_journey, community_content_ctr, top_article_driven_cases_month, su_gpt_attribution_deferred) — use startDate/endDate. Extra executive fields (e.g. costPerCase, communityNameHints) match the executive tool. Search client uid comes from auth (optional ecoSystemId). MCP does not send `tenantId` on requests."
+  : "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, search classification, conversion, sessions, **Overview tab** (overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). Executive recipe orchestrations are not available as `reportType` here; use the `executive_business_query` tool for those. Search client uid comes from auth (optional ecoSystemId). MCP does not send `tenantId` on requests.";
 
 const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
   const c = async () => (getCreds ? await getCreds() : creds);
@@ -155,7 +215,27 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
       openWorldHint: true,
     },
     async (args) => {
-      const { reportType, startDate, endDate, count, sessionId, pageNumber, startIndex, sortByField, sortType } = args;
+      const {
+        reportType,
+        startDate,
+        endDate,
+        count,
+        sessionId,
+        pageNumber,
+        startIndex,
+        sortByField,
+        sortType,
+        searchQuery,
+        reactionFilterType,
+        sortingField,
+        casesCaseUid,
+        casesCaseSubject,
+        casesSessionCookie,
+        casesEmailId,
+        isAscending,
+        searchKey,
+        advertisementSortType,
+      } = args;
       const credsForRequest = await c();
       if (!credsForRequest) {
         return {
@@ -339,6 +419,77 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
             endDate,
           };
           analyticsResponse = await Analytics.getTileDataMetrics2(tileParams);
+          break;
+        }
+        case reportTypes.overviewSearchClickPosition: {
+          console.error("overviewSearchClickPosition triggered");
+          analyticsResponse = await Analytics.getOverviewSearchClickPosition({
+            ...scopeParamsForOverview(args, credsForRequest),
+            searchQuery: searchQuery ?? "",
+            sortingField: sortingField ?? "click",
+            sortType: sortType ?? "desc",
+            pageNumber: pageNumber ?? 1,
+          });
+          break;
+        }
+        case reportTypes.overviewCreatedCases: {
+          console.error("overviewCreatedCases triggered");
+          analyticsResponse = await Analytics.getOverviewCreatedCases({
+            ...scopeParamsForOverview(args, credsForRequest),
+            caseUid: casesCaseUid ?? "",
+            caseSubject: casesCaseSubject ?? "",
+            sessionCookie: casesSessionCookie ?? "",
+            emailId: casesEmailId ?? "",
+            pageNumber: pageNumber ?? 1,
+            isAscending: isAscending ?? true,
+          });
+          break;
+        }
+        case reportTypes.overviewFeaturedSnippet: {
+          console.error("overviewFeaturedSnippet triggered");
+          analyticsResponse = await Analytics.getOverviewFeaturedSnippet(scopeParamsForOverview(args, credsForRequest));
+          break;
+        }
+        case reportTypes.overviewKnowledgeTitle: {
+          console.error("overviewKnowledgeTitle triggered");
+          analyticsResponse = await Analytics.getOverviewKnowledgeTitle(scopeParamsForOverview(args, credsForRequest));
+          break;
+        }
+        case reportTypes.overviewPageRating: {
+          console.error("overviewPageRating triggered");
+          analyticsResponse = await Analytics.getOverviewPageRating(scopeParamsForOverview(args, credsForRequest));
+          break;
+        }
+        case reportTypes.overviewSearchFeedback: {
+          console.error("overviewSearchFeedback triggered");
+          analyticsResponse = await Analytics.getOverviewSearchFeedback({
+            ...scopeParamsForOverview(args, credsForRequest),
+            pageNumber: pageNumber ?? 1,
+          });
+          break;
+        }
+        case reportTypes.overviewAdvertisements: {
+          console.error("overviewAdvertisements triggered");
+          analyticsResponse = await Analytics.getOverviewAdvertisements({
+            ...scopeParamsForOverview(args, credsForRequest),
+            pageNumber: pageNumber ?? 1,
+            searchKey: searchKey ?? "",
+            advertisementSortType: advertisementSortType ?? "",
+          });
+          break;
+        }
+        case reportTypes.llmResponseFeedback: {
+          console.error("llmResponseFeedback triggered");
+          analyticsResponse = await Analytics.getLlmResponseFeedback({
+            startDate,
+            endDate,
+            searchClientId: credsForRequest.config.uid,
+            count: count ?? 10,
+            pageNumber: pageNumber ?? 1,
+            internalUser: args.internalUser ?? "all",
+            searchQuery: searchQuery ?? "",
+            reactionFilterType: reactionFilterType ?? "all",
+          });
           break;
         }
         default:
