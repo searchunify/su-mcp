@@ -6,6 +6,7 @@ import {
   sumTopLevelClicksForHints,
   sumTopLevelClicksExcludingHints,
 } from "./business-query-helpers.js";
+import { ENABLE_EXECUTIVE_RECIPE_REPORTS } from "./executive-recipes-config.js";
 
 /** Stable `recipeId` values (no internal question codes in the API surface). */
 const RECIPES = {
@@ -111,13 +112,6 @@ const businessQueryInput = baseContext.extend({
     .boolean()
     .optional()
     .describe("self_solve_rate USSV: maps to `directlyViewSetting` on leadership API."),
-  tenantId: z
-    .string()
-    .uuid()
-    .optional()
-    .describe(
-      "Analytics tenant UUID for POST /conversion/* `validator` routes, GET session list, and leadership deflection APIs. Falls back to `tenantId` in MCP creds or HTTP `searchunify-tenant-id`."
-    ),
   includeLeadershipCostSavingsCsv: z
     .boolean()
     .optional()
@@ -246,16 +240,6 @@ function conversionSessionBody(input, creds) {
   return body;
 }
 
-/** Adds `tenantId` when present so direct analytics calls satisfy POST /api/v2/conversion `validator`. */
-function conversionRollupBody(input, creds) {
-  const body = conversionSessionBody(input, creds);
-  const tenantId = resolveTenantId(input, creds);
-  if (tenantId) {
-    body.tenantId = tenantId;
-  }
-  return body;
-}
-
 function leadershipVolumeBody(input, creds) {
   const base = {
     internalUser: input.internalUser ?? "all",
@@ -266,10 +250,6 @@ function leadershipVolumeBody(input, creds) {
     return { ...base, ecoId: input.ecoId, uid: null };
   }
   return { ...base, uid: input.uid ?? creds.config.uid, ecoId: null };
-}
-
-function resolveTenantId(input, creds) {
-  return input.tenantId ?? creds?.config?.tenantId ?? undefined;
 }
 
 function articleTableParams(input, creds) {
@@ -430,7 +410,7 @@ async function runContentGapRecipe(input, creds) {
 
 async function runSelfSolveRateRecipe(input, creds) {
   const A = creds.suRestClient.Analytics();
-  const stageBody = conversionRollupBody(input, creds);
+  const stageBody = conversionSessionBody(input, creds);
   const stage1 = await A.postCaseDeflectionStage1(stageBody);
   const r1 = normalizeSdkResult(stage1);
   const out = {
@@ -473,31 +453,10 @@ async function runSelfSolveRateRecipe(input, creds) {
   return out;
 }
 
-function missingTenantPayload(recipeId) {
-  return {
-    recipeId,
-    summary:
-      "Missing tenantId: add `tenantId` to the recipe, MCP creds.json, or HTTP header `searchunify-tenant-id` (analytics tenant UUID). Required for this flow.",
-    subcalls: [
-      {
-        id: "tenantId",
-        ok: false,
-        statusCode: 0,
-        error: "Missing tenantId (tool argument or creds.config.tenantId).",
-      },
-    ],
-  };
-}
-
 async function runRoiCaseDeflectionRecipe(input, creds) {
-  const tenantId = resolveTenantId(input, creds);
-  if (!tenantId) {
-    return missingTenantPayload(RECIPES.roi_case_deflection);
-  }
   const A = creds.suRestClient.Analytics();
   const uid = input.uid ?? creds.config.uid;
   const leadershipBase = {
-    tenantId,
     internalUser: input.internalUser ?? "all",
     from: `${input.from} 00:00:00`,
     to: `${input.to} 23:59:59`,
@@ -554,16 +513,11 @@ async function runRoiCaseDeflectionRecipe(input, creds) {
 }
 
 async function runSavingsFromConversionRecipe(input, creds) {
-  const tenantId = resolveTenantId(input, creds);
-  if (!tenantId) {
-    return missingTenantPayload(RECIPES.savings_from_conversion);
-  }
   const A = creds.suRestClient.Analytics();
   const t = tileOverviewParams(input, creds);
   const convBody = {
     from: input.from,
     to: input.to,
-    tenantId,
     internalUser: input.internalUser ?? "all",
     limit: input.conversionSummaryLimit ?? 50,
     offset: input.conversionSummaryOffset ?? 1,
@@ -583,7 +537,6 @@ async function runSavingsFromConversionRecipe(input, creds) {
   ];
   if (input.includeLeadershipDeflectionCountInSavings) {
     const lb = {
-      tenantId,
       internalUser: input.internalUser ?? "all",
       from: `${input.from} 00:00:00`,
       to: `${input.to} 23:59:59`,
@@ -617,10 +570,6 @@ async function runSavingsFromConversionRecipe(input, creds) {
 }
 
 async function runCasesWithoutSelfServiceRecipe(input, creds) {
-  const tenantId = resolveTenantId(input, creds);
-  if (!tenantId) {
-    return missingTenantPayload(RECIPES.cases_without_self_service);
-  }
   const def =
     input.casesWithoutSelfServiceSearchDefinition ?? "no_search_with_case";
   const A = creds.suRestClient.Analytics();
@@ -629,7 +578,6 @@ async function runCasesWithoutSelfServiceRecipe(input, creds) {
     endDate: input.to,
     count: input.sessionListCount ?? 100,
     startIndex: input.sessionListStartIndex,
-    tenantId,
     internalUser: input.internalUser ?? "all",
     searchFilter: "no",
     caseFilter: "yes",
@@ -657,18 +605,12 @@ async function runCasesWithoutSelfServiceRecipe(input, creds) {
 }
 
 async function runDirectViewsCaseCreationRecipe(input, creds) {
-  const tenantId = resolveTenantId(input, creds);
-  if (!tenantId) {
-    return missingTenantPayload(RECIPES.direct_views_case_creation);
-  }
   const A = creds.suRestClient.Analytics();
-  const body = conversionRollupBody(input, creds);
-  body.tenantId = tenantId;
+  const body = conversionSessionBody(input, creds);
   const stage1 = await A.postCaseDeflectionStage1(body);
   const r1 = normalizeSdkResult(stage1);
   const trendBody = {
     ...body,
-    tenantId,
     filterValue: "stage1",
   };
   if (input.includeStage1TrueDeflectionTrend === true) {
@@ -688,16 +630,11 @@ async function runDirectViewsCaseCreationRecipe(input, creds) {
 }
 
 async function runStage2DeflectionRecipe(input, creds) {
-  const tenantId = resolveTenantId(input, creds);
-  if (!tenantId) {
-    return missingTenantPayload(RECIPES.stage2_deflection);
-  }
   const A = creds.suRestClient.Analytics();
-  const body = conversionRollupBody(input, creds);
-  body.tenantId = tenantId;
+  const body = conversionSessionBody(input, creds);
   const stage2 = await A.postCaseDeflectionStage2(body);
   const r2 = normalizeSdkResult(stage2);
-  const trendBody = { ...body, tenantId, filterValue: "stage2" };
+  const trendBody = { ...body, filterValue: "stage2" };
   const trends = await A.postCaseDeflectionTrends(trendBody);
   const rT = normalizeSdkResult(trends);
   const subcalls = [
@@ -788,25 +725,9 @@ async function runAttachArticleCaseJourneyRecipe(input, creds) {
 }
 
 async function runCommunityContentCtrRecipe(input, creds) {
-  const tenantId = resolveTenantId(input, creds);
-  if (!tenantId) {
-    return {
-      recipeId: RECIPES.community_content_ctr,
-      summary:
-        "Deferred subcalls: tenantId is required for leadership get-content-sources and clicksCountContentSource. Pass tenantId on the recipe or add tenantId to MCP creds.json (analytics tenant UUID, same as admin tenant-id).",
-      subcalls: [
-        {
-          id: "tenantId",
-          ok: false,
-          statusCode: 0,
-          error: "Missing tenantId (tool argument or creds.config.tenantId).",
-        },
-      ],
-    };
-  }
   const A = creds.suRestClient.Analytics();
   const uid = input.uid ?? creds.config.uid;
-  const leadershipBody = { tenantId };
+  const leadershipBody = {};
   if (input.leadershipCsTypes?.length) {
     leadershipBody.csTypes = input.leadershipCsTypes;
   }
@@ -814,7 +735,6 @@ async function runCommunityContentCtrRecipe(input, creds) {
     from: input.from,
     to: input.to,
     uid,
-    tenantId,
     internalUser: input.internalUser ?? "all",
     userMetricsFlag: input.userMetricsFlag,
     userMetricsFilters: input.userMetricsFilters,
@@ -926,11 +846,14 @@ export const initializeExecutiveBusinessQueryTools = async ({
   creds,
   getCreds,
 }) => {
+  if (!ENABLE_EXECUTIVE_RECIPE_REPORTS) {
+    return;
+  }
   const c = () => (getCreds ? getCreds() : creds);
 
   server.tool(
     "executive_business_query",
-    "Executive analytics recipes: Phase 1 (traffic, search-no-click, relevance, content gap, self-solve), Phase 2 (ROI deflection count + optional savings CSV, savings vs conversion summary, sessions without self-service, stage1 direct-view trends, stage2 deflection + optional worst-article list), Phase 3 (article contrast, attach+journey, community CTR slice, top-case proxy, SU-GPT deferral). Per-subcall ok/statusCode in JSON. `/leadership/*` needs admin/BFF `analytics-secret`. Most POST /api/v2/conversion routes and session list need `tenantId` (recipe, creds, or `searchunify-tenant-id` header). See analytics/docs/business-queries/.",
+    "Executive analytics recipes: Phase 1 (traffic, search-no-click, relevance, content gap, self-solve), Phase 2 (ROI deflection count + optional savings CSV, savings vs conversion summary, sessions without self-service, stage1 direct-view trends, stage2 deflection + optional worst-article list), Phase 3 (article contrast, attach+journey, community CTR slice, top-case proxy, SU-GPT deferral). Per-subcall ok/statusCode in JSON. `/leadership/*` needs admin/BFF `analytics-secret` when routed through admin. MCP does not send `tenantId` on any request (same as raw `analytics` session/tile routes). See analytics/docs/business-queries/.",
     businessQueryInput.shape,
     async (args) => {
       const credsForRequest = await Promise.resolve(c());

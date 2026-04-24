@@ -55,7 +55,7 @@ const HEADER_PREFIX = 'searchunify-';
 
 /**
  * Build creds from HTTP request headers (for HTTP MCP). Returns null if instance or uid missing.
- * Header names (lowercase): searchunify-instance, searchunify-uid, searchunify-tenant-id (optional analytics tenant UUID for Phase 3 leadership/clicks), searchunify-auth-type, searchunify-api-key, etc.
+ * Header names (lowercase): searchunify-instance, searchunify-uid, searchunify-auth-type, searchunify-api-key, etc.
  */
 function getCredsFromHeaders(headers) {
   const get = (k) => headers[HEADER_PREFIX + k];
@@ -65,7 +65,6 @@ function getCredsFromHeaders(headers) {
 
   const authType = (get('auth-type') || 'apiKey').toLowerCase();
   const timeout = parseInt(get('timeout') || '60000', 10);
-  const tenantId = get('tenant-id')?.trim();
 
   const config = {
     instance,
@@ -73,9 +72,6 @@ function getCredsFromHeaders(headers) {
     timeout: Number.isFinite(timeout) ? timeout : 60000,
     authType: authType === 'apikey' ? 'apiKey' : authType === 'clientcredentials' ? 'clientCredentials' : authType,
   };
-  if (tenantId) {
-    config.tenantId = tenantId;
-  }
 
   if (config.authType === 'apiKey') {
     const apiKey = get('api-key');

@@ -19,13 +19,7 @@ import {
   runTopArticleDrivenCasesMonthRecipe,
   runSuGptAttributionDeferredRecipe,
 } from "./su-core-business-queries.js";
-
-/**
- * `false` = executive recipe `reportType`s are omitted from the `analytics` tool (not in the enum, not runnable here).
- * `true` = same `recipeId` values as `executive_business_query` are valid `reportType`s and get the merged schema.
- * Does not affect `executive_business_query` or non-recipe report types.
- */
-const ENABLE_EXECUTIVE_RECIPE_REPORTS = false;
+import { ENABLE_EXECUTIVE_RECIPE_REPORTS } from "./executive-recipes-config.js";
 
 const baseReportTypes = {
   searchQueryWithNoClicks: "searchQueryWithNoClicks",
@@ -49,8 +43,8 @@ const reportTypes = {
   ...(ENABLE_EXECUTIVE_RECIPE_REPORTS ? RECIPES : {}),
 };
 
-/** Map `analytics` tool args to executive runner input: startDate/endDate → from/to, count → classificationCount; creds for tenant. */
-function buildAnalyticsExecutiveInput(args, creds) {
+/** Map `analytics` tool args to executive runner input: startDate/endDate → from/to, count → classificationCount. */
+function buildAnalyticsExecutiveInput(args) {
   const {
     reportType: _reportType,
     startDate,
@@ -71,7 +65,6 @@ function buildAnalyticsExecutiveInput(args, creds) {
     sortByField,
     sortType,
     ...rest,
-    tenantId: rest.tenantId ?? creds?.config?.tenantId,
   };
 }
 
@@ -146,8 +139,8 @@ const analyticsInputSchema = ENABLE_EXECUTIVE_RECIPE_REPORTS
   : z.object(baseAnalyticsFieldShape);
 
 const analyticsToolDescription = ENABLE_EXECUTIVE_RECIPE_REPORTS
-  ? "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, search classification, conversion, sessions. **Executive orchestrations (same as `executive_business_query`):** all `reportType` values in Phase 1 (traffic, search_no_click_pct, … self_solve_rate), Phase 2 (roi_case_deflection, savings_from_conversion, cases_without_self_service, direct_views_case_creation, stage2_deflection), Phase 3 (article_deflection_contrast, attach_article_case_journey, community_content_ctr, top_article_driven_cases_month, su_gpt_attribution_deferred) — use startDate/endDate; optional `tenantId` in args or creds. Extra executive fields (e.g. costPerCase, communityNameHints) match the executive tool. Tenant for conversion/session routes is in args or creds; host may inject when proxied through admin."
-  : "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, search classification, conversion, sessions. Executive recipe orchestrations are not available as `reportType` here; use the `executive_business_query` tool for those. Optional `tenantId` in args or creds for conversion/session routes; host may inject when proxied through admin.";
+  ? "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, search classification, conversion, sessions. **Executive orchestrations (same as `executive_business_query`):** all `reportType` values in Phase 1 (traffic, search_no_click_pct, … self_solve_rate), Phase 2 (roi_case_deflection, savings_from_conversion, cases_without_self_service, direct_views_case_creation, stage2_deflection), Phase 3 (article_deflection_contrast, attach_article_case_journey, community_content_ctr, top_article_driven_cases_month, su_gpt_attribution_deferred) — use startDate/endDate. Extra executive fields (e.g. costPerCase, communityNameHints) match the executive tool. MCP does not send `tenantId` on requests (same wire shape as non-executive analytics routes)."
+  : "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, search classification, conversion, sessions. Executive recipe orchestrations are not available as `reportType` here; use the `executive_business_query` tool for those. MCP does not send `tenantId` on requests.";
 
 const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
   const c = async () => (getCreds ? await getCreds() : creds);
@@ -186,7 +179,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
             if (!run) {
               payload = { error: "no runner for reportType", reportType };
             } else {
-              const input = buildAnalyticsExecutiveInput(args, credsForRequest);
+              const input = buildAnalyticsExecutiveInput(args);
               payload = await run(input, credsForRequest);
             }
           }
