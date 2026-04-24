@@ -59,6 +59,28 @@ const reportTypes = {
   ...(ENABLE_EXECUTIVE_RECIPE_REPORTS ? RECIPES : {}),
 };
 
+/**
+ * Overview-tab + LLM feedback `reportType` values — each has a dedicated `switch` branch that passes only
+ * keys allowed by `su-sdk-js` Joi (`analytics-validation.js`). Never spread full `args` into the SDK.
+ * `pageNumber` MCP max 500 matches SDK overview + LLM validators; `scopeParamsForOverview` omits `pageNumber`;
+ * featured/knowledge use `scopeParamsForSimilarValidationOverview` (no `count` / `pageNumber`).
+ */
+const OVERVIEW_AND_LLM_FEEDBACK_REPORT_TYPES = [
+  reportTypes.overviewSearchClickPosition,
+  reportTypes.overviewCreatedCases,
+  reportTypes.overviewFeaturedSnippet,
+  reportTypes.overviewKnowledgeTitle,
+  reportTypes.overviewPageRating,
+  reportTypes.overviewSearchFeedback,
+  reportTypes.overviewAdvertisements,
+  reportTypes.llmResponseFeedback,
+];
+for (const id of OVERVIEW_AND_LLM_FEEDBACK_REPORT_TYPES) {
+  if (!Object.values(baseReportTypes).includes(id)) {
+    throw new Error(`su-core-analytics: invalid OVERVIEW_AND_LLM_FEEDBACK_REPORT_TYPES entry: ${id}`);
+  }
+}
+
 /** Map `analytics` tool args to executive runner input: startDate/endDate → from/to, count → classificationCount. */
 function buildAnalyticsExecutiveInput(args) {
   const {
@@ -116,20 +138,51 @@ function jsonTextResult(obj) {
   };
 }
 
-/** Scope params like session list: uid from creds unless ecosystem. Never includes tenantId. */
-function scopeParamsForOverview(args, credsForRequest) {
-  const { startDate, endDate, count, pageNumber, internalUser, ecoSystemId } = args;
+/** Minimal scope for SDK `similarValidation` only (featured snippet, knowledge graph titles).
+ * Omits `count` and `pageNumber` — those routes do not read them in `su-sdk-js`, and Joi rejects unknown keys
+ * (e.g. `pageNumber`) if they were ever merged here by mistake. */
+function scopeParamsForSimilarValidationOverview(args, credsForRequest) {
+  const { startDate, endDate, internalUser, ecoSystemId } = args;
   const base = {
     startDate,
     endDate,
-    count,
-    pageNumber,
     internalUser: internalUser ?? "all",
   };
   if (ecoSystemId) {
     return { ...base, ecoSystemId };
   }
   return { ...base, searchClientId: credsForRequest.config.uid };
+}
+
+/** Scope for paginated / count-aware overview mirrors: dates, `count`, `internalUser`, uid or eco.
+ * Never includes `tenantId` or `pageNumber` — add `pageNumber` (and filters) per `switch` case where the SDK schema allows it. */
+function scopeParamsForOverview(args, credsForRequest) {
+  const { startDate, endDate, count, internalUser, ecoSystemId } = args;
+  const base = {
+    startDate,
+    endDate,
+    count,
+    internalUser: internalUser ?? "all",
+  };
+  if (ecoSystemId) {
+    return { ...base, ecoSystemId };
+  }
+  return { ...base, searchClientId: credsForRequest.config.uid };
+}
+
+/** Params for `getLlmResponseFeedback` only (`llmResponseFeedbackOverview` Joi — no `ecoSystemId` in SDK yet). */
+function paramsForLlmResponseFeedback(args, credsForRequest) {
+  const { startDate, endDate, count, pageNumber, searchQuery, reactionFilterType, internalUser } = args;
+  return {
+    startDate,
+    endDate,
+    searchClientId: credsForRequest.config.uid,
+    count: count ?? 10,
+    pageNumber: pageNumber ?? 1,
+    internalUser: internalUser ?? "all",
+    searchQuery: searchQuery ?? "",
+    reactionFilterType: reactionFilterType ?? "all",
+  };
 }
 
 const allReportTypeEnumValues = Object.values(reportTypes);
@@ -148,12 +201,21 @@ const baseAnalyticsFieldShape = {
     .number()
     .min(1)
     .max(500)
-    .describe("Row/page count for classification; maps to `classificationCount` in executive recipes that use it."),
+    .describe(
+      "Row/page count (required on this tool for uniformity). Maps to `classificationCount` in executive recipes, LLM `limit`, **overviewPageRating** API `limit`, etc. Ignored on the wire for **overviewFeaturedSnippet** / **overviewKnowledgeTitle** (fixed backend limits)."
+    ),
   sessionId: z
     .string()
     .optional()
     .describe("Session cookie for sessionDetails / sessionListTable."),
-  pageNumber: z.number().min(1).max(10).optional(),
+  pageNumber: z
+    .number()
+    .min(1)
+    .max(500)
+    .optional()
+    .describe(
+      "1-based page index (max 500, matches `su-sdk-js` overview + LLM Joi). Used for overviewSearchClickPosition, overviewCreatedCases, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback; ignored for overviewFeaturedSnippet / overviewKnowledgeTitle."
+    ),
   startIndex: z
     .number()
     .min(1)
@@ -447,17 +509,24 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         }
         case reportTypes.overviewFeaturedSnippet: {
           console.error("overviewFeaturedSnippet triggered");
-          analyticsResponse = await Analytics.getOverviewFeaturedSnippet(scopeParamsForOverview(args, credsForRequest));
+          analyticsResponse = await Analytics.getOverviewFeaturedSnippet(
+            scopeParamsForSimilarValidationOverview(args, credsForRequest)
+          );
           break;
         }
         case reportTypes.overviewKnowledgeTitle: {
           console.error("overviewKnowledgeTitle triggered");
-          analyticsResponse = await Analytics.getOverviewKnowledgeTitle(scopeParamsForOverview(args, credsForRequest));
+          analyticsResponse = await Analytics.getOverviewKnowledgeTitle(
+            scopeParamsForSimilarValidationOverview(args, credsForRequest)
+          );
           break;
         }
         case reportTypes.overviewPageRating: {
           console.error("overviewPageRating triggered");
-          analyticsResponse = await Analytics.getOverviewPageRating(scopeParamsForOverview(args, credsForRequest));
+          analyticsResponse = await Analytics.getOverviewPageRating({
+            ...scopeParamsForOverview(args, credsForRequest),
+            pageNumber: pageNumber ?? 1,
+          });
           break;
         }
         case reportTypes.overviewSearchFeedback: {
@@ -480,16 +549,9 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         }
         case reportTypes.llmResponseFeedback: {
           console.error("llmResponseFeedback triggered");
-          analyticsResponse = await Analytics.getLlmResponseFeedback({
-            startDate,
-            endDate,
-            searchClientId: credsForRequest.config.uid,
-            count: count ?? 10,
-            pageNumber: pageNumber ?? 1,
-            internalUser: args.internalUser ?? "all",
-            searchQuery: searchQuery ?? "",
-            reactionFilterType: reactionFilterType ?? "all",
-          });
+          analyticsResponse = await Analytics.getLlmResponseFeedback(
+            paramsForLlmResponseFeedback(args, credsForRequest)
+          );
           break;
         }
         default:
