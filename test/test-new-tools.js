@@ -185,6 +185,23 @@ describe('formatForClaude with search client data', () => {
     assert.ok(result.content);
     assert.equal(result.content[0].type, 'text');
   });
+
+  it('should include every top-level array when object has multiple (conversion summary)', () => {
+    const data = {
+      total: [{ count: 696 }],
+      searchSessions: [
+        { text_entered: 'api', users: 2, sessions: 4, count: 4 },
+        { text_entered: 'join', users: 4, sessions: 4, count: 4 },
+      ],
+    };
+    const result = formatForClaude(data);
+    const text = result.content[0].text;
+    assert.ok(text.includes('total:'), 'labels total section');
+    assert.ok(text.includes('count: 696'), 'total row');
+    assert.ok(text.includes('searchSessions:'), 'labels searchSessions section');
+    assert.ok(text.includes('text_entered: api'), 'first session row');
+    assert.ok(text.includes('text_entered: join'), 'second session row');
+  });
 });
 
 // --- Test module imports ---

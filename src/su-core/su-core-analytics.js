@@ -30,6 +30,44 @@ const baseReportTypes = {
   averageClickPosition: "averageClickPosition",
   sessionDetails: "sessionDetails",
   sessionListTable: "sessionListTable",
+  /** GET /api/v2/getSessionTrackingFormattedResult — Session Tracking formatted (admin). */
+  sessionTrackingFormattedResult: "sessionTrackingFormattedResult",
+  /** POST /api/v2/conversion/clicksCountContentSource — Search filter based clicks. */
+  conversionClicksCountContentSource: "conversionClicksCountContentSource",
+  /** POST /api/v2/conversion/conversionSummary — Search Summary (conversions). */
+  conversionSearchSummary: "conversionSearchSummary",
+  /** POST /api/v2/conversion/topClickedDocs — Most popular documents. */
+  conversionTopClickedDocs: "conversionTopClickedDocs",
+  /** POST /api/v2/conversion/searchesOnClick — “Most popular documents → Search keywords”: terms that led to clicks on one document `url` (not sessionDetails). */
+  conversionSearchesOnClick: "conversionSearchesOnClick",
+  /** POST /api/v2/conversion/topSearchesWithClicks — Top clicked searches. */
+  conversionTopSearchesWithClicks: "conversionTopSearchesWithClicks",
+  /** POST /api/v2/conversion/clickedResults — Top Clicked Searches: documents clicked for one search phrase (`text_entered`). */
+  conversionClickedResults: "conversionClickedResults",
+  /** POST /api/v2/conversion/current-relevance-index — Relevance index (current window). */
+  conversionCurrentRelevanceIndex: "conversionCurrentRelevanceIndex",
+  /** POST /api/v2/conversion/relevance-index — Relevance index drilldown for a from/to range. */
+  conversionRelevanceIndex: "conversionRelevanceIndex",
+  /** POST /api/v2/conversion/caseDeflectionStage1 — Session analytics overview (stage 1). */
+  conversionCaseDeflectionStage1: "conversionCaseDeflectionStage1",
+  /** POST /api/v2/conversion/sessionDetails — Session Tracking grid (filters); not clickedResults / searchesOnClick drill-downs. */
+  conversionSessionTrackingDetails: "conversionSessionTrackingDetails",
+  /** POST /api/v2/conversion/discussions — Discussions ready to become help articles. */
+  conversionDiscussions: "conversionDiscussions",
+  /** POST /api/v2/conversion/attachedArticles — Attached to case. */
+  conversionAttachedArticles: "conversionAttachedArticles",
+  /** POST /api/v2/conversion/articlesCreatedCases — Unsuccessful case deflection. */
+  conversionArticlesCreatedCases: "conversionArticlesCreatedCases",
+  /** POST /api/v2/conversion/searchesCreatedCase — Failed deflect: “searches for clicked result” for one article `url`. */
+  conversionSearchesCreatedCase: "conversionSearchesCreatedCase",
+  /** POST /api/v2/conversion/articlesDeflectedCase — Successful case deflection. */
+  conversionArticlesDeflectedCase: "conversionArticlesDeflectedCase",
+  /** POST /api/v2/conversion/searchesOnDeflection — Successful deflect: “all searches for clicked result” for one article `url`. */
+  conversionSearchesOnDeflection: "conversionSearchesOnDeflection",
+  /** POST /api/v2/conversion/articlesCreatedCasesSessions — Session list for an article (failed vs deflected via `caseDeflaction`). */
+  conversionArticlesCreatedCasesSessions: "conversionArticlesCreatedCasesSessions",
+  /** POST /api/v2/conversion/linkSharing — Share results analytics. */
+  conversionLinkSharing: "conversionLinkSharing",
   /** POST /api/v2/content/tileDataContent — content-gap counts (failed/no-click/no-result, daily avgs) */
   tileDataContent: "tileDataContent",
   /** POST /api/v2/overview/tileDataMetrics1 — data.visitors is session count; searchUsers, uniqueUsersByDevice, email metrics */
@@ -79,6 +117,28 @@ for (const id of OVERVIEW_AND_LLM_FEEDBACK_REPORT_TYPES) {
   if (!Object.values(baseReportTypes).includes(id)) {
     throw new Error(`su-core-analytics: invalid OVERVIEW_AND_LLM_FEEDBACK_REPORT_TYPES entry: ${id}`);
   }
+}
+
+/** Core POST /api/v2/conversion/* body: from/to, internalUser, uid or ecoId. MCP does not add `tenantId`; admin/BFF adds it when proxying to analytics. */
+function conversionPostBase(args, credsForRequest) {
+  const internalUser = args.internalUser ?? "all";
+  const body = {
+    from: `${args.startDate} 00:00:00`,
+    to: `${args.endDate} 23:59:59`,
+    internalUser,
+  };
+  if (args.ecoSystemId) {
+    body.ecoId = args.ecoSystemId;
+    body.uid = null;
+  } else {
+    body.uid = credsForRequest.config.uid;
+    body.ecoId = null;
+  }
+  if (args.userMetricsFlag !== undefined) body.userMetricsFlag = args.userMetricsFlag;
+  if (args.userMetricsFilters !== undefined) body.userMetricsFilters = args.userMetricsFilters;
+  if (args.userMetricsLimit !== undefined) body.userMetricsLimit = args.userMetricsLimit;
+  if (args.userMetricsOffset !== undefined) body.userMetricsOffset = args.userMetricsOffset;
+  return body;
 }
 
 /** Map `analytics` tool args to executive runner input: startDate/endDate → from/to, count → classificationCount. */
@@ -187,9 +247,12 @@ function paramsForLlmResponseFeedback(args, credsForRequest) {
 
 const allReportTypeEnumValues = Object.values(reportTypes);
 
+const conversionsReportRoutingHint =
+  "**Conversions routing (pick `reportType` + fields):** (A) *Most popular documents → what search terms led to clicks on this one doc URL?* → **conversionSearchesOnClick** + **clickedDocumentUrl** (from **conversionTopClickedDocs** if the user only names a title). (B) *Top Clicked Searches widget → for this search phrase, which result rows were clicked?* → **conversionClickedResults** + **clickedResultsSearchQuery** only (API `text_entered`). **Not** (B) if the user means case-deflection “searches for this *article* URL”—that uses **caseDeflectionArticleUrl** below. (C) **Attached to Case** grid → **conversionAttachedArticles**. (D) **Unsuccessful case deflection** (“Articles failed to Deflect cases”): article list → **conversionArticlesCreatedCases**; *searches for clicked result* on one article → **conversionSearchesCreatedCase** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle**; *session list* for that article → **conversionArticlesCreatedCasesSessions** + same url/searchType + **caseDeflectionSessionsSuccessfulDeflection** `false`. (E) **Successful case deflection** (“Articles that Deflected cases”): article list → **conversionArticlesDeflectedCase**; *all searches for clicked result* → **conversionSearchesOnDeflection** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle**; sessions → **conversionArticlesCreatedCasesSessions** + **caseDeflectionSessionsSuccessfulDeflection** `true`. **Top clicked search *keywords* list** (no phrase filter yet) → **conversionTopSearchesWithClicks**, not **conversionClickedResults**. **Never** use **conversionSessionTrackingDetails** for (A)–(E)—it is only the Session Tracking *grid* (filters), not these reports.";
+
 const reportTypeZodDescription = ENABLE_EXECUTIVE_RECIPE_REPORTS
-  ? "Report id: raw API types (tileData*, search*, session*…) or the same `recipeId` values as `executive_business_query` (all Phase 1–3 orchestrations: traffic … su_gpt_attribution_deferred)."
-  : "Report id: raw SearchUnify analytics APIs only (tileData*, search*, session*…). Executive recipe IDs are not available on this tool; use `executive_business_query` for those orchestrations.";
+  ? `Report id: raw API types (tileData*, search*, session*…) or the same \`recipeId\` values as \`executive_business_query\` (all Phase 1–3 orchestrations: traffic … su_gpt_attribution_deferred). ${conversionsReportRoutingHint}`
+  : `Report id: raw SearchUnify analytics APIs only (tileData*, search*, session*…). Executive recipe IDs are not available on this tool; use \`executive_business_query\` for those orchestrations. ${conversionsReportRoutingHint}`;
 
 const baseAnalyticsFieldShape = {
   reportType: z
@@ -229,7 +292,9 @@ const baseAnalyticsFieldShape = {
   internalUser: z
     .enum(["all", "internal", "external", "externalOnly"])
     .optional()
-    .describe("Overview / LLM mirrors: maps to analytics internalUser (default all)."),
+    .describe(
+      "Maps to analytics `internalUser` (default **all**). Used on Overview/LLM routes and on **conversion** POST bodies (via `conversionPostBase`)."
+    ),
   ecoSystemId: z
     .string()
     .uuid()
@@ -254,6 +319,68 @@ const baseAnalyticsFieldShape = {
   isAscending: z.boolean().optional().describe("Cases Created: sort direction for case list (default true)."),
   searchKey: z.string().optional().describe("Advertisement Performance: search_key filter."),
   advertisementSortType: z.string().optional().describe("Advertisement Performance: sort_type."),
+  conversionDetailKeyword: z
+    .string()
+    .optional()
+    .describe(
+      "**conversionSessionTrackingDetails only:** Session Tracking *grid* text filter (admin keyword). **Do not** use for: popular-doc search-on-click (**conversionSearchesOnClick** + **clickedDocumentUrl**); top-clicked phrase → documents (**conversionClickedResults** + **clickedResultsSearchQuery**); case-deflection per-article searches or sessions (**conversionSearchesCreatedCase** / **conversionSearchesOnDeflection** / **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl**)."
+    ),
+  conversionSearchingType: z.string().optional().describe("conversionSessionTrackingDetails: searchingType."),
+  conversionExactSearch: z.union([z.boolean(), z.string()]).optional().describe("conversionSessionTrackingDetails: exactSearch."),
+  conversionDetailOffset: z
+    .number()
+    .min(1)
+    .optional()
+    .describe(
+      "**conversionSessionTrackingDetails** / **conversionLinkSharing** / **conversionArticlesCreatedCasesSessions** (admin `offset`, 1-based page for sessions)."
+    ),
+  conversionDetailLimit: z
+    .number()
+    .min(1)
+    .max(500)
+    .optional()
+    .describe(
+      "**conversionSessionTrackingDetails** page size, or **conversionArticlesCreatedCasesSessions** `limit` (coerced to string on the wire like admin, default 10 if omitted)."
+    ),
+  conversionSearchFilter: z.string().optional().describe("conversionSessionTrackingDetails: searchFilter menu value."),
+  conversionClickFilter: z.string().optional().describe("conversionSessionTrackingDetails: clickFilter."),
+  conversionSupportFilter: z.string().optional().describe("conversionSessionTrackingDetails: supportFilter."),
+  conversionCaseFilter: z.string().optional().describe("conversionSessionTrackingDetails: caseFilter."),
+  conversionArticleFilter: z.string().optional().describe("conversionSessionTrackingDetails: articleFilter."),
+  shareResultsCaseNumber: z.string().optional().describe("conversionLinkSharing: case number filter."),
+  shareResultsLinkedBy: z.string().optional().describe("conversionLinkSharing: linked-by filter."),
+  shareResultsModeSelect: z.any().optional().describe("conversionLinkSharing: modeselectInsideResults (same shape as admin)."),
+  conversionSearchTypeArticle: z
+    .string()
+    .optional()
+    .describe(
+      "**conversionArticlesCreatedCases** / **conversionArticlesDeflectedCase** lists: `searchType` (e.g. all). **Required** for **conversionSearchesCreatedCase**, **conversionSearchesOnDeflection**, and **conversionArticlesCreatedCasesSessions** (admin Conversions case-deflection drill-downs)."
+    ),
+  conversionArticleOffset: z.number().min(1).optional().describe("conversionArticles*: pagination offset (default 1)."),
+  clickedDocumentUrl: z
+    .string()
+    .optional()
+    .describe(
+      "**Required for conversionSearchesOnClick only:** `url` from **conversionTopClickedDocs** (Most popular documents). **Not** **caseDeflectionArticleUrl** (that is for case-deflection drill-downs on **conversionArticles**\* rows)."
+    ),
+  clickedResultsSearchQuery: z
+    .string()
+    .optional()
+    .describe(
+      "**Only for conversionClickedResults** (Top Clicked Searches → *documents* for one **search phrase**). Maps to `text_entered`. **Do not** use for case-deflection “searches for this article”—use **caseDeflectionArticleUrl** + **conversionSearchesCreatedCase** or **conversionSearchesOnDeflection**."
+    ),
+  caseDeflectionArticleUrl: z
+    .string()
+    .optional()
+    .describe(
+      "**Only** for **conversionSearchesCreatedCase** (failed deflect), **conversionSearchesOnDeflection** (successful deflect), or **conversionArticlesCreatedCasesSessions**: the article `url` from a row in **conversionArticlesCreatedCases** or **conversionArticlesDeflectedCase**. **Not** the same as **clickedDocumentUrl** (that is *Most popular documents* / searchesOnClick)."
+    ),
+  caseDeflectionSessionsSuccessfulDeflection: z
+    .boolean()
+    .optional()
+    .describe(
+      "**conversionArticlesCreatedCasesSessions only:** `false` = drill-down from **Articles failed to Deflect cases** (admin `caseDeflaction: false`); `true` = from **Articles that Deflected cases** (`caseDeflaction: true`)."
+    ),
 };
 
 const analyticsInputSchema = ENABLE_EXECUTIVE_RECIPE_REPORTS
@@ -261,8 +388,8 @@ const analyticsInputSchema = ENABLE_EXECUTIVE_RECIPE_REPORTS
   : z.object(baseAnalyticsFieldShape);
 
 const analyticsToolDescription = ENABLE_EXECUTIVE_RECIPE_REPORTS
-  ? "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, search classification, conversion, sessions, **Overview tab** (overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **Executive orchestrations (same as `executive_business_query`):** all `reportType` values in Phase 1 (traffic, search_no_click_pct, … self_solve_rate), Phase 2 (roi_case_deflection, savings_from_conversion, cases_without_self_service, direct_views_case_creation, stage2_deflection), Phase 3 (article_deflection_contrast, attach_article_case_journey, community_content_ctr, top_article_driven_cases_month, su_gpt_attribution_deferred) — use startDate/endDate. Extra executive fields (e.g. costPerCase, communityNameHints) match the executive tool. Search client uid comes from auth (optional ecoSystemId). MCP does not send `tenantId` on requests."
-  : "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, search classification, conversion, sessions, **Overview tab** (overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). Executive recipe orchestrations are not available as `reportType` here; use the `executive_business_query` tool for those. Search client uid comes from auth (optional ecoSystemId). MCP does not send `tenantId` on requests.";
+  ? "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, search classification, sessions (`sessionDetails`, `sessionListTable`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, `conversionCaseDeflectionStage1`, `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Disambiguation:** *User gave a search phrase and wants documents clicked in Top Clicked Searches* → **conversionClickedResults** + **clickedResultsSearchQuery**. *User gave a doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *User gave an article URL from **Articles failed / deflected** grids* → **conversionSearchesCreatedCase** or **conversionSearchesOnDeflection** or **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Per-document “what searches led to clicks on this doc?”** → **conversionSearchesOnClick** + **clickedDocumentUrl**. **Per-search “what documents were clicked for this query?”** → **conversionClickedResults** + **clickedResultsSearchQuery**. **Case deflection drill-downs:** **caseDeflectionArticleUrl** + **conversionSearchTypeArticle**; sessions add **caseDeflectionSessionsSuccessfulDeflection**. **Not** **conversionSessionTrackingDetails** for these. **Overview tab** (overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **Executive orchestrations (same as `executive_business_query`):** all `reportType` values in Phase 1 (traffic, search_no_click_pct, … self_solve_rate), Phase 2 (roi_case_deflection, savings_from_conversion, cases_without_self_service, direct_views_case_creation, stage2_deflection), Phase 3 (article_deflection_contrast, attach_article_case_journey, community_content_ctr, top_article_driven_cases_month, su_gpt_attribution_deferred) — use startDate/endDate. Extra executive fields (e.g. costPerCase, communityNameHints) match the executive tool. Search client uid comes from auth (optional ecoSystemId). MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it."
+  : "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, search classification, sessions (`sessionDetails`, `sessionListTable`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, `conversionCaseDeflectionStage1`, `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Disambiguation:** *Search phrase → documents clicked (Top Clicked Searches)* → **conversionClickedResults** + **clickedResultsSearchQuery**. *Doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *Article URL from **Articles failed / deflected*** → **conversionSearchesCreatedCase** / **conversionSearchesOnDeflection** / **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Per-document “what searches led to clicks on this doc?”** → **conversionSearchesOnClick** + **clickedDocumentUrl**. **Per-search “what documents were clicked for this query?”** → **conversionClickedResults** + **clickedResultsSearchQuery**. **Case deflection:** **caseDeflectionArticleUrl** + **conversionSearchTypeArticle**; sessions: **caseDeflectionSessionsSuccessfulDeflection**. **Not** **conversionSessionTrackingDetails** for these. **Overview tab** (overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). Executive recipe orchestrations are not available as `reportType` here; use the `executive_business_query` tool for those. Search client uid comes from auth (optional ecoSystemId). MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it.";
 
 const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
   const c = async () => (getCreds ? await getCreds() : creds);
@@ -287,6 +414,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         startIndex,
         sortByField,
         sortType,
+        internalUser,
         searchQuery,
         reactionFilterType,
         sortingField,
@@ -297,6 +425,25 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         isAscending,
         searchKey,
         advertisementSortType,
+        conversionDetailKeyword,
+        conversionSearchingType,
+        conversionExactSearch,
+        conversionDetailOffset,
+        conversionDetailLimit,
+        conversionSearchFilter,
+        conversionClickFilter,
+        conversionSupportFilter,
+        conversionCaseFilter,
+        conversionArticleFilter,
+        shareResultsCaseNumber,
+        shareResultsLinkedBy,
+        shareResultsModeSelect,
+        conversionSearchTypeArticle,
+        conversionArticleOffset,
+        clickedDocumentUrl,
+        clickedResultsSearchQuery,
+        caseDeflectionArticleUrl,
+        caseDeflectionSessionsSuccessfulDeflection,
       } = args;
       const credsForRequest = await c();
       if (!credsForRequest) {
@@ -554,14 +701,274 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           );
           break;
         }
+        case reportTypes.sessionTrackingFormattedResult: {
+          console.error("sessionTrackingFormattedResult triggered");
+          const stf = {
+            startDate,
+            endDate,
+            count: count ?? 500,
+            startIndex: startIndex ?? 1,
+            internalUser: internalUser ?? "all",
+            sortByField: sortByField === "count" ? "click" : sortByField,
+            sortType,
+          };
+          if (args.ecoSystemId) {
+            stf.ecoSystemId = args.ecoSystemId;
+          } else {
+            stf.searchClientId = credsForRequest.config.uid;
+          }
+          analyticsResponse = await Analytics.getSessionTrackingFormattedResult(stf);
+          break;
+        }
+        case reportTypes.conversionClicksCountContentSource: {
+          console.error("conversionClicksCountContentSource triggered");
+          analyticsResponse = await Analytics.postClicksCountContentSource(conversionPostBase(args, credsForRequest));
+          break;
+        }
+        case reportTypes.conversionSearchSummary: {
+          console.error("conversionSearchSummary triggered");
+          const sBody = {
+            ...conversionPostBase(args, credsForRequest),
+            limit: count,
+            offset: pageNumber ?? 1,
+          };
+          analyticsResponse = await Analytics.postConversionSummary(sBody);
+          break;
+        }
+        case reportTypes.conversionTopClickedDocs: {
+          console.error("conversionTopClickedDocs triggered");
+          const tBody = { ...conversionPostBase(args, credsForRequest) };
+          if (conversionDetailLimit != null) tBody.limit = conversionDetailLimit;
+          if (conversionDetailOffset != null) tBody.offset = conversionDetailOffset;
+          analyticsResponse = await Analytics.postConversionTopClickedDocs(tBody);
+          break;
+        }
+        case reportTypes.conversionSearchesOnClick: {
+          const urlTrimmed = clickedDocumentUrl?.trim();
+          if (!urlTrimmed) {
+            return jsonTextResult({
+              error:
+                "clickedDocumentUrl is required for conversionSearchesOnClick (document `url` from conversionTopClickedDocs; maps to POST /api/v2/conversion/searchesOnClick `url`).",
+            });
+          }
+          analyticsResponse = await Analytics.postConversionSearchesOnClick({
+            ...conversionPostBase(args, credsForRequest),
+            url: urlTrimmed,
+          });
+          break;
+        }
+        case reportTypes.conversionTopSearchesWithClicks: {
+          console.error("conversionTopSearchesWithClicks triggered");
+          const tsBody = { ...conversionPostBase(args, credsForRequest) };
+          if (conversionDetailLimit != null) tsBody.limit = conversionDetailLimit;
+          if (conversionDetailOffset != null) tsBody.offset = conversionDetailOffset;
+          analyticsResponse = await Analytics.postConversionTopSearchesWithClicks(tsBody);
+          break;
+        }
+        case reportTypes.conversionClickedResults: {
+          const q = clickedResultsSearchQuery?.trim();
+          if (!q) {
+            return jsonTextResult({
+              error:
+                "clickedResultsSearchQuery is required for conversionClickedResults (the search phrase; maps to POST /api/v2/conversion/clickedResults `text_entered`, admin “Top Clicked Searches – Documents”).",
+            });
+          }
+          analyticsResponse = await Analytics.postConversionClickedResults({
+            ...conversionPostBase(args, credsForRequest),
+            text_entered: q,
+          });
+          break;
+        }
+        case reportTypes.conversionCurrentRelevanceIndex: {
+          console.error("conversionCurrentRelevanceIndex triggered");
+          analyticsResponse = await Analytics.postCurrentRelevanceIndex({
+            uid: credsForRequest.config.uid,
+            internalUser: internalUser ?? "all",
+          });
+          break;
+        }
+        case reportTypes.conversionRelevanceIndex: {
+          console.error("conversionRelevanceIndex triggered");
+          analyticsResponse = await Analytics.postRelevanceIndex({
+            uid: credsForRequest.config.uid,
+            internalUser: internalUser ?? "all",
+            from: startDate,
+            to: endDate,
+          });
+          break;
+        }
+        case reportTypes.conversionCaseDeflectionStage1: {
+          console.error("conversionCaseDeflectionStage1 triggered");
+          analyticsResponse = await Analytics.postCaseDeflectionStage1(conversionPostBase(args, credsForRequest));
+          break;
+        }
+        case reportTypes.conversionSessionTrackingDetails: {
+          console.error("conversionSessionTrackingDetails triggered");
+          const sdBody = {
+            ...conversionPostBase(args, credsForRequest),
+            keyword: conversionDetailKeyword ?? "",
+            searchingType: conversionSearchingType ?? "",
+            exactSearch: conversionExactSearch ?? false,
+            offset: conversionDetailOffset ?? 1,
+            limit: conversionDetailLimit != null ? String(conversionDetailLimit) : "10",
+            searchFilter: conversionSearchFilter ?? "",
+            clickFilter: conversionClickFilter ?? "",
+            supportFilter: conversionSupportFilter ?? "",
+            caseFilter: conversionCaseFilter ?? "",
+            articleFilter: conversionArticleFilter ?? "",
+          };
+          analyticsResponse = await Analytics.postConversionSessionDetails(sdBody);
+          break;
+        }
+        case reportTypes.conversionDiscussions: {
+          console.error("conversionDiscussions triggered");
+          const dBody = { ...conversionPostBase(args, credsForRequest) };
+          if (conversionDetailLimit != null) dBody.limit = conversionDetailLimit;
+          if (conversionDetailOffset != null) dBody.offset = conversionDetailOffset;
+          analyticsResponse = await Analytics.postConversionDiscussions(dBody);
+          break;
+        }
+        case reportTypes.conversionAttachedArticles: {
+          console.error("conversionAttachedArticles triggered");
+          analyticsResponse = await Analytics.getAttachedArticles({
+            startDate,
+            endDate,
+            searchClientId: credsForRequest.config.uid,
+            ecoSystemId: args.ecoSystemId,
+            count: conversionDetailLimit ?? count ?? 100,
+            offset: conversionArticleOffset ?? conversionDetailOffset ?? 1,
+            userMetricsFlag: args.userMetricsFlag,
+            userMetricsFilters: args.userMetricsFilters,
+            userMetricsLimit: args.userMetricsLimit,
+            userMetricsOffset: args.userMetricsOffset,
+          });
+          break;
+        }
+        case reportTypes.conversionArticlesCreatedCases: {
+          console.error("conversionArticlesCreatedCases triggered");
+          analyticsResponse = await Analytics.getCaseCreatedArticles({
+            startDate,
+            endDate,
+            searchClientId: credsForRequest.config.uid,
+            ecoSystemId: args.ecoSystemId,
+            searchType: conversionSearchTypeArticle ?? "all",
+            count: conversionDetailLimit ?? count ?? 100,
+            offset: conversionArticleOffset ?? conversionDetailOffset ?? 1,
+            userMetricsFlag: args.userMetricsFlag,
+            userMetricsFilters: args.userMetricsFilters,
+            userMetricsLimit: args.userMetricsLimit,
+            userMetricsOffset: args.userMetricsOffset,
+          });
+          break;
+        }
+        case reportTypes.conversionArticlesDeflectedCase: {
+          console.error("conversionArticlesDeflectedCase triggered");
+          analyticsResponse = await Analytics.getCaseDeflectedArticles({
+            startDate,
+            endDate,
+            searchClientId: credsForRequest.config.uid,
+            ecoSystemId: args.ecoSystemId,
+            searchType: conversionSearchTypeArticle ?? "all",
+            count: conversionDetailLimit ?? count ?? 100,
+            offset: conversionArticleOffset ?? conversionDetailOffset ?? 1,
+            userMetricsFlag: args.userMetricsFlag,
+            userMetricsFilters: args.userMetricsFilters,
+            userMetricsLimit: args.userMetricsLimit,
+            userMetricsOffset: args.userMetricsOffset,
+          });
+          break;
+        }
+        case reportTypes.conversionSearchesCreatedCase: {
+          const defUrl = caseDeflectionArticleUrl?.trim();
+          const stArticle = conversionSearchTypeArticle?.trim();
+          if (!defUrl || !stArticle) {
+            return jsonTextResult({
+              error:
+                "caseDeflectionArticleUrl and conversionSearchTypeArticle are required for conversionSearchesCreatedCase (admin “Articles failed to Deflect cases” → searches for clicked result; POST …/searchesCreatedCase).",
+            });
+          }
+          analyticsResponse = await Analytics.postConversionSearchesCreatedCase({
+            ...conversionPostBase(args, credsForRequest),
+            url: defUrl,
+            searchType: stArticle,
+            terminateQueryLogic: true,
+          });
+          break;
+        }
+        case reportTypes.conversionSearchesOnDeflection: {
+          const defUrl2 = caseDeflectionArticleUrl?.trim();
+          const stArticle2 = conversionSearchTypeArticle?.trim();
+          if (!defUrl2 || !stArticle2) {
+            return jsonTextResult({
+              error:
+                "caseDeflectionArticleUrl and conversionSearchTypeArticle are required for conversionSearchesOnDeflection (admin “Articles that Deflected cases” → all searches for clicked result; POST …/searchesOnDeflection).",
+            });
+          }
+          analyticsResponse = await Analytics.postConversionSearchesOnDeflection({
+            ...conversionPostBase(args, credsForRequest),
+            url: defUrl2,
+            searchType: stArticle2,
+            terminateQueryLogic: true,
+          });
+          break;
+        }
+        case reportTypes.conversionArticlesCreatedCasesSessions: {
+          const sessUrl = caseDeflectionArticleUrl?.trim();
+          const stSess = conversionSearchTypeArticle?.trim();
+          if (caseDeflectionSessionsSuccessfulDeflection === undefined || caseDeflectionSessionsSuccessfulDeflection === null) {
+            return jsonTextResult({
+              error:
+                "caseDeflectionSessionsSuccessfulDeflection is required for conversionArticlesCreatedCasesSessions (`false` = Articles failed to Deflect sessions, `true` = Articles that Deflected; maps to admin `caseDeflaction`).",
+            });
+          }
+          if (!sessUrl || !stSess) {
+            return jsonTextResult({
+              error:
+                "caseDeflectionArticleUrl and conversionSearchTypeArticle are required for conversionArticlesCreatedCasesSessions (POST …/articlesCreatedCasesSessions).",
+            });
+          }
+          analyticsResponse = await Analytics.postConversionArticlesCreatedCasesSessions({
+            ...conversionPostBase(args, credsForRequest),
+            url: sessUrl,
+            searchType: stSess,
+            offset: conversionDetailOffset ?? 1,
+            limit: conversionDetailLimit != null ? String(conversionDetailLimit) : "10",
+            caseDeflaction: caseDeflectionSessionsSuccessfulDeflection,
+          });
+          break;
+        }
+        case reportTypes.conversionLinkSharing: {
+          console.error("conversionLinkSharing triggered");
+          const lsBody = {
+            ...conversionPostBase(args, credsForRequest),
+            limit: conversionDetailLimit ?? 10,
+            offset: conversionDetailOffset ?? pageNumber ?? 1,
+            modeselectInsideResults: shareResultsModeSelect ?? [],
+            caseNumberText: shareResultsCaseNumber ?? "",
+            linkedByText: shareResultsLinkedBy ?? "",
+          };
+          analyticsResponse = await Analytics.postConversionLinkSharing(lsBody);
+          break;
+        }
         default:
           console.error("invalid reportType ", reportType);
       }
 
-      if (!analyticsResponse?.data) {
+      if (analyticsResponse?.status === false) {
+        return jsonTextResult({
+          error: analyticsResponse.message || "analytics_request_failed",
+          reportType,
+          details: analyticsResponse,
+        });
+      }
+      if (analyticsResponse?.data === undefined || analyticsResponse?.data === null) {
         return {
-          type: "text",
-          json: "some error occured while searching, response is empty",
+          content: [
+            {
+              type: "text",
+              text: "some error occured while searching, response is empty",
+            },
+          ],
         };
       }
       console.error("analyticsResponse", analyticsResponse.data);
