@@ -70,6 +70,30 @@ const baseReportTypes = {
   conversionLinkSharing: "conversionLinkSharing",
   /** POST /api/v2/content/tileDataContent — content-gap counts (failed/no-click/no-result, daily avgs) */
   tileDataContent: "tileDataContent",
+  /** POST /api/v2/content/splitTileDataContent — ecosystem split rows for tile-data content gap. */
+  contentSplitTileDataContent: "contentSplitTileDataContent",
+  /** POST /api/v2/content/unSuccessfulSummaryChart — Unsuccessful Searches chart. */
+  contentUnsuccessfulSummaryChart: "contentUnsuccessfulSummaryChart",
+  /** POST /api/v2/overview/searchsWithNoClicks — Search Classifications (searches with no clicks). */
+  contentSearchesWithNoClicks: "contentSearchesWithNoClicks",
+  /** POST /api/v2/content/succesiveNoClicks — no-click successive searches drill-down for one keyword. */
+  contentSuccessiveNoClicks: "contentSuccessiveNoClicks",
+  /** POST /api/v2/overview/searchesWithNoResult — Search Classifications (searches with no result). */
+  contentSearchesWithNoResult: "contentSearchesWithNoResult",
+  /** POST /api/v2/content/succesiveNoResults — no-result successive searches drill-down for one keyword. */
+  contentSuccessiveNoResults: "contentSuccessiveNoResults",
+  /** POST /api/v2/content/unSuccessfulSearchSessionChart — Sessions with unsuccessful searches chart. */
+  contentUnsuccessfulSearchSessionChart: "contentUnsuccessfulSearchSessionChart",
+  /** POST /api/v2/content/highConversion — High Conversion Results Not on Page One. */
+  contentHighConversion: "contentHighConversion",
+  /** POST /api/v2/content/highConversionClicks — High Conversion click rows for one `searchText` URL. */
+  contentHighConversionClicks: "contentHighConversionClicks",
+  /** POST /api/v2/content/highConversionSessions — High Conversion session rows for one `searchText` URL. */
+  contentHighConversionSessions: "contentHighConversionSessions",
+  /** POST /api/v2/content/articleUsageByAgents — Articles Usage By Agents main grid. */
+  contentArticleUsageByAgents: "contentArticleUsageByAgents",
+  /** POST /api/v2/content/successiveArticlesUsage — Articles Usage By Agents drill-down rows. */
+  contentSuccessiveArticlesUsage: "contentSuccessiveArticlesUsage",
   /** POST /api/v2/overview/tileDataMetrics1 — data.visitors is session count; searchUsers, uniqueUsersByDevice, email metrics */
   tileDataMetrics1: "tileDataMetrics1",
   /** POST /api/v2/overview/tileDataMetrics2 — searches, clicks, cases, withResult/withoutResult, uniqueSearches */
@@ -90,6 +114,20 @@ const baseReportTypes = {
   overviewAdvertisements: "overviewAdvertisements",
   /** POST /api/v2/llm/llm-response-feedback — SearchUnifyGPT Feedback */
   llmResponseFeedback: "llmResponseFeedback",
+  /** POST /leadership/get-content-sources — list content sources (`elasticIndexName` for assisted case volume). */
+  leadershipGetContentSources: "leadershipGetContentSources",
+  /** POST /leadership/unassisted-self-solve-volume — Unassisted Self Solve / implicit deflection volume (Leadership dashboard). */
+  leadershipUnassistedSelfSolveVolume: "leadershipUnassistedSelfSolveVolume",
+  /** POST /leadership/assisted-self-solve-volume — Assisted Self Solve / explicit deflection & KM metrics. */
+  leadershipAssistedSelfSolveVolume: "leadershipAssistedSelfSolveVolume",
+  /** POST /leadership/assisted-case-volume — Assisted case volume by content source index. */
+  leadershipAssistedCaseVolume: "leadershipAssistedCaseVolume",
+  /** POST /leadership/deflection-count — raw implicit/explicit deflection counts per quarter (no USD). */
+  leadershipDeflectionCount: "leadershipDeflectionCount",
+  /** Same counts as deflection-count with USD cost columns; cost per case defaults to 200 if not provided. */
+  leadershipCostSavingsDeflectionUsd: "leadershipCostSavingsDeflectionUsd",
+  /** POST /leadership/deflection-cost-savings-download — CSV / email export (requires analytics-secret via admin). */
+  leadershipDeflectionCostSavingsDownload: "leadershipDeflectionCostSavingsDownload",
 };
 
 const reportTypes = {
@@ -139,6 +177,31 @@ function conversionPostBase(args, credsForRequest) {
   if (args.userMetricsLimit !== undefined) body.userMetricsLimit = args.userMetricsLimit;
   if (args.userMetricsOffset !== undefined) body.userMetricsOffset = args.userMetricsOffset;
   return body;
+}
+
+/** Leadership POST bodies: optional explicit `from`/`to` (omit both to use analytics *last six quarters* default). */
+function leadershipOptionalFromTo(args) {
+  if (args.leadershipUseBackendLastSixQuarters === true) {
+    return {};
+  }
+  return {
+    from: `${args.startDate} 00:00:00`,
+    to: `${args.endDate} 23:59:59`,
+  };
+}
+
+/** uid xor ecoId + internalUser + optional quarter window for `/leadership/*` routes that require scope. */
+function leadershipUidEcoBody(args, credsForRequest) {
+  const internalUser = args.internalUser ?? "all";
+  const base = { internalUser, ...leadershipOptionalFromTo(args) };
+  if (args.ecoSystemId) {
+    return { ...base, ecoId: args.ecoSystemId, uid: null };
+  }
+  return { ...base, uid: credsForRequest.config.uid, ecoId: null };
+}
+
+function leadershipUsdRound2(n) {
+  return Math.round(Number(n) * 100) / 100;
 }
 
 /** Map `analytics` tool args to executive runner input: startDate/endDate → from/to, count → classificationCount. */
@@ -250,9 +313,15 @@ const allReportTypeEnumValues = Object.values(reportTypes);
 const conversionsReportRoutingHint =
   "**Conversions routing (pick `reportType` + fields):** (A) *Most popular documents → what search terms led to clicks on this one doc URL?* → **conversionSearchesOnClick** + **clickedDocumentUrl** (from **conversionTopClickedDocs** if the user only names a title). (B) *Top Clicked Searches widget → for this search phrase, which result rows were clicked?* → **conversionClickedResults** + **clickedResultsSearchQuery** only (API `text_entered`). **Not** (B) if the user means case-deflection “searches for this *article* URL”—that uses **caseDeflectionArticleUrl** below. (C) **Attached to Case** grid → **conversionAttachedArticles**. (D) **Unsuccessful case deflection** (“Articles failed to Deflect cases”): article list → **conversionArticlesCreatedCases**; *searches for clicked result* on one article → **conversionSearchesCreatedCase** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle**; *session list* for that article → **conversionArticlesCreatedCasesSessions** + same url/searchType + **caseDeflectionSessionsSuccessfulDeflection** `false`. (E) **Successful case deflection** (“Articles that Deflected cases”): article list → **conversionArticlesDeflectedCase**; *all searches for clicked result* → **conversionSearchesOnDeflection** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle**; sessions → **conversionArticlesCreatedCasesSessions** + **caseDeflectionSessionsSuccessfulDeflection** `true`. **Top clicked search *keywords* list** (no phrase filter yet) → **conversionTopSearchesWithClicks**, not **conversionClickedResults**. **Never** use **conversionSessionTrackingDetails** for (A)–(E)—it is only the Session Tracking *grid* (filters), not these reports.";
 
+const contentGapReportRoutingHint =
+  "**Content-gap routing:** (1) **Tile Data Content Gap** → **tileDataContent** (ecosystem split rows: **contentSplitTileDataContent**, eco only). (2) **Unsuccessful Searches** chart → **contentUnsuccessfulSummaryChart**. (3) **Search Classifications** tables: no-click list → **contentSearchesWithNoClicks**; no-result list → **contentSearchesWithNoResult**. Their sub-report “next/successive searches for selected keyword” uses **contentSuccessiveNoClicks** or **contentSuccessiveNoResults** with **contentGapText** set to that selected keyword. (4) **Sessions with unsuccessful searches** → **contentUnsuccessfulSearchSessionChart**. (5) **High Conversion Results Not on Page One** main grid → **contentHighConversion**; selected row clicks → **contentHighConversionClicks** with **contentGapSearchTextUrl**; selected row sessions → **contentHighConversionSessions** with **contentGapSearchTextUrl** (plus optional cookie/email/search query filters). (6) **Articles Usage By Agents** main grid → **contentArticleUsageByAgents**; sub-report attached articles for selected agent → **contentSuccessiveArticlesUsage** with **contentGapText** set to agent email.";
+
+const leadershipReportRoutingHint =
+  "**Leadership dashboard (admin):** rollup data is **quarterly**; without explicit dates the analytics service defaults to the **last six completed quarters**. **Always** ask the user which quarter or date range they care about, and say the series may span up to six quarters. **leadershipUseBackendLastSixQuarters** `true` → omit `from`/`to` (same default window as the charts); otherwise **startDate**/**endDate** map to `from`/`to`. **Unassisted Self Solve Volume** (implicit deflection volume, self-solve rate, etc.) → **leadershipUnassistedSelfSolveVolume**; set **directlyViewSetting** `true` only when the org uses “All sessions” direct-view semantics (mirrors admin). **Assisted Self Solve Volume** (explicit deflection / KM metrics) → **leadershipAssistedSelfSolveVolume**. **Assisted Case Volume** → **leadershipAssistedCaseVolume**; optional **leadershipContentSourceIndexName** = `elasticIndexName` from **leadershipGetContentSources**. **Cost savings (USD)** from deflection counts → **leadershipCostSavingsDeflectionUsd** (ask for **leadershipCostPerCaseUsd**; if the user does not give a value use **200**). Raw counts only → **leadershipDeflectionCount**. **CSV export** → **leadershipDeflectionCostSavingsDownload** + **leadershipCostPerCaseUsd** (default 200) + **leadershipCsvVariant** (default 1). `/leadership/*` may need admin/BFF `analytics-secret` when proxied.";
+
 const reportTypeZodDescription = ENABLE_EXECUTIVE_RECIPE_REPORTS
-  ? `Report id: raw API types (tileData*, search*, session*…) or the same \`recipeId\` values as \`executive_business_query\` (all Phase 1–3 orchestrations: traffic … su_gpt_attribution_deferred). ${conversionsReportRoutingHint}`
-  : `Report id: raw SearchUnify analytics APIs only (tileData*, search*, session*…). Executive recipe IDs are not available on this tool; use \`executive_business_query\` for those orchestrations. ${conversionsReportRoutingHint}`;
+  ? `Report id: raw API types (tileData*, search*, session*…) or the same \`recipeId\` values as \`executive_business_query\` (all Phase 1–3 orchestrations: traffic … su_gpt_attribution_deferred). ${conversionsReportRoutingHint} ${contentGapReportRoutingHint} ${leadershipReportRoutingHint}`
+  : `Report id: raw SearchUnify analytics APIs only (tileData*, search*, session*…). Executive recipe IDs are not available on this tool; use \`executive_business_query\` for those orchestrations. ${conversionsReportRoutingHint} ${contentGapReportRoutingHint} ${leadershipReportRoutingHint}`;
 
 const baseAnalyticsFieldShape = {
   reportType: z
@@ -300,6 +369,12 @@ const baseAnalyticsFieldShape = {
     .uuid()
     .optional()
     .describe("When set, scope requests with ecoId instead of uid (mutually exclusive with creds uid on the wire)."),
+  directlyViewSetting: z
+    .boolean()
+    .optional()
+    .describe(
+      "**leadershipUnassistedSelfSolveVolume** only: `true` matches admin when Direct View is enabled (All sessions + direct page view exit). Omit if unknown."
+    ),
   searchQuery: z
     .string()
     .optional()
@@ -381,6 +456,78 @@ const baseAnalyticsFieldShape = {
     .describe(
       "**conversionArticlesCreatedCasesSessions only:** `false` = drill-down from **Articles failed to Deflect cases** (admin `caseDeflaction: false`); `true` = from **Articles that Deflected cases** (`caseDeflaction: true`)."
     ),
+  contentGapSearchQuery: z
+    .string()
+    .optional()
+    .describe("Content-gap filters (`searchQuery`) for classification/high-conversion/agents grids."),
+  contentGapText: z
+    .string()
+    .optional()
+    .describe("Selected keyword/agent text (`text`) for successive drill-downs: contentSuccessiveNoClicks/NoResults/successiveArticlesUsage."),
+  contentGapSortingField: z
+    .string()
+    .optional()
+    .describe("Content-gap sortingField for search classifications/high conversion."),
+  contentGapSortType: z
+    .enum(["asc", "desc", "ASC", "DESC"])
+    .optional()
+    .describe("Content-gap sortType (`asc`/`desc`)."),
+  contentGapOrderBy: z
+    .enum(["ASC", "DESC"])
+    .optional()
+    .describe("Articles Usage By Agents ordering (`orderBy`: ASC or DESC)."),
+  contentGapSearchGrouping: z
+    .boolean()
+    .optional()
+    .describe("Search Classifications grouping flag (`searchGrouping`) for /overview/searchsWithNoClicks and /overview/searchesWithNoResult."),
+  contentGapActionStatusFilters: z
+    .array(z.string())
+    .optional()
+    .describe("Optional actionStatusFilters array for contentSearchesWithNoResult."),
+  contentGapSearchTextUrl: z
+    .string()
+    .optional()
+    .describe("High Conversion sub-reports: selected main-row URL mapped to `searchText` (required for contentHighConversionClicks/Sessions)."),
+  contentGapCookie: z
+    .string()
+    .optional()
+    .describe("contentHighConversionSessions optional cookie filter."),
+  contentGapEmailId: z
+    .string()
+    .optional()
+    .describe("contentHighConversionSessions optional emailId filter."),
+  contentGapArticleTitleSearchQuery: z
+    .string()
+    .optional()
+    .describe("contentSuccessiveArticlesUsage optional articleTitleSearchQuery filter."),
+  contentGapCaseSubjectSearchQuery: z
+    .string()
+    .optional()
+    .describe("contentSuccessiveArticlesUsage optional caseSubjectSearchQuery filter."),
+  leadershipUseBackendLastSixQuarters: z
+    .boolean()
+    .optional()
+    .describe(
+      "Leadership `reportType`s only: when true, omit `from`/`to` on the wire so analytics uses its built-in **last six quarters** rollup (matches admin Leadership charts). **startDate**/**endDate** are ignored in that mode. Otherwise map **startDate**/**endDate** to `from`/`to` for a custom quarter window. Always confirm with the user which quarter(s) they need."
+    ),
+  leadershipContentSourceIndexName: z
+    .string()
+    .optional()
+    .describe(
+      "**leadershipAssistedCaseVolume** only: `indexName` / `elasticIndexName` from **leadershipGetContentSources**; omit for tenant-wide assisted case rollups."
+    ),
+  leadershipCostPerCaseUsd: z
+    .number()
+    .min(0)
+    .max(10000)
+    .optional()
+    .describe(
+      "**leadershipCostSavingsDeflectionUsd** and **leadershipDeflectionCostSavingsDownload**: USD per deflected case—**ask the user**; if they do not specify, use **200** (same default as admin Leadership cost chart)."
+    ),
+  leadershipCsvVariant: z
+    .union([z.literal(0), z.literal(1), z.literal(4)])
+    .optional()
+    .describe("**leadershipDeflectionCostSavingsDownload** only: `csv` download format (default 1)."),
 };
 
 const analyticsInputSchema = ENABLE_EXECUTIVE_RECIPE_REPORTS
@@ -388,8 +535,8 @@ const analyticsInputSchema = ENABLE_EXECUTIVE_RECIPE_REPORTS
   : z.object(baseAnalyticsFieldShape);
 
 const analyticsToolDescription = ENABLE_EXECUTIVE_RECIPE_REPORTS
-  ? "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, search classification, sessions (`sessionDetails`, `sessionListTable`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, `conversionCaseDeflectionStage1`, `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Disambiguation:** *User gave a search phrase and wants documents clicked in Top Clicked Searches* → **conversionClickedResults** + **clickedResultsSearchQuery**. *User gave a doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *User gave an article URL from **Articles failed / deflected** grids* → **conversionSearchesCreatedCase** or **conversionSearchesOnDeflection** or **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Per-document “what searches led to clicks on this doc?”** → **conversionSearchesOnClick** + **clickedDocumentUrl**. **Per-search “what documents were clicked for this query?”** → **conversionClickedResults** + **clickedResultsSearchQuery**. **Case deflection drill-downs:** **caseDeflectionArticleUrl** + **conversionSearchTypeArticle**; sessions add **caseDeflectionSessionsSuccessfulDeflection**. **Not** **conversionSessionTrackingDetails** for these. **Overview tab** (overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **Executive orchestrations (same as `executive_business_query`):** all `reportType` values in Phase 1 (traffic, search_no_click_pct, … self_solve_rate), Phase 2 (roi_case_deflection, savings_from_conversion, cases_without_self_service, direct_views_case_creation, stage2_deflection), Phase 3 (article_deflection_contrast, attach_article_case_journey, community_content_ctr, top_article_driven_cases_month, su_gpt_attribution_deferred) — use startDate/endDate. Extra executive fields (e.g. costPerCase, communityNameHints) match the executive tool. Search client uid comes from auth (optional ecoSystemId). MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it."
-  : "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, search classification, sessions (`sessionDetails`, `sessionListTable`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, `conversionCaseDeflectionStage1`, `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Disambiguation:** *Search phrase → documents clicked (Top Clicked Searches)* → **conversionClickedResults** + **clickedResultsSearchQuery**. *Doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *Article URL from **Articles failed / deflected*** → **conversionSearchesCreatedCase** / **conversionSearchesOnDeflection** / **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Per-document “what searches led to clicks on this doc?”** → **conversionSearchesOnClick** + **clickedDocumentUrl**. **Per-search “what documents were clicked for this query?”** → **conversionClickedResults** + **clickedResultsSearchQuery**. **Case deflection:** **caseDeflectionArticleUrl** + **conversionSearchTypeArticle**; sessions: **caseDeflectionSessionsSuccessfulDeflection**. **Not** **conversionSessionTrackingDetails** for these. **Overview tab** (overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). Executive recipe orchestrations are not available as `reportType` here; use the `executive_business_query` tool for those. Search client uid comes from auth (optional ecoSystemId). MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it.";
+  ? "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, search classification, sessions (`sessionDetails`, `sessionListTable`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, `conversionCaseDeflectionStage1`, `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Content Gap tab** (`contentSplitTileDataContent`, `contentUnsuccessfulSummaryChart`, `contentSearchesWithNoClicks`, `contentSuccessiveNoClicks`, `contentSearchesWithNoResult`, `contentSuccessiveNoResults`, `contentUnsuccessfulSearchSessionChart`, `contentHighConversion`, `contentHighConversionClicks`, `contentHighConversionSessions`, `contentArticleUsageByAgents`, `contentSuccessiveArticlesUsage`) with content-gap helper fields (`contentGap*`). **Disambiguation:** *User gave a search phrase and wants documents clicked in Top Clicked Searches* → **conversionClickedResults** + **clickedResultsSearchQuery**. *User gave a doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *User gave an article URL from **Articles failed / deflected** grids* → **conversionSearchesCreatedCase** or **conversionSearchesOnDeflection** or **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Per-document “what searches led to clicks on this doc?”** → **conversionSearchesOnClick** + **clickedDocumentUrl**. **Per-search “what documents were clicked for this query?”** → **conversionClickedResults** + **clickedResultsSearchQuery**. **Case deflection drill-downs:** **caseDeflectionArticleUrl** + **conversionSearchTypeArticle**; sessions add **caseDeflectionSessionsSuccessfulDeflection**. **Not** **conversionSessionTrackingDetails** for these. **Overview tab** (overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **Leadership dashboard:** `leadershipGetContentSources`, `leadershipUnassistedSelfSolveVolume`, `leadershipAssistedSelfSolveVolume`, `leadershipAssistedCaseVolume`, `leadershipDeflectionCount`, `leadershipCostSavingsDeflectionUsd`, `leadershipDeflectionCostSavingsDownload` — see `reportType` hint; **leadershipUseBackendLastSixQuarters** for admin default window; **leadershipCostPerCaseUsd** defaults to **200** when the user does not specify cost per case. **Executive orchestrations (same as `executive_business_query`):** all `reportType` values in Phase 1 (traffic, search_no_click_pct, … self_solve_rate), Phase 2 (roi_case_deflection, savings_from_conversion, cases_without_self_service, direct_views_case_creation, stage2_deflection), Phase 3 (article_deflection_contrast, attach_article_case_journey, community_content_ctr, top_article_driven_cases_month, su_gpt_attribution_deferred) — use startDate/endDate. Extra executive fields (e.g. costPerCase, communityNameHints) match the executive tool. Search client uid comes from auth (optional ecoSystemId). MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it."
+  : "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, search classification, sessions (`sessionDetails`, `sessionListTable`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, `conversionCaseDeflectionStage1`, `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Content Gap tab** (`contentSplitTileDataContent`, `contentUnsuccessfulSummaryChart`, `contentSearchesWithNoClicks`, `contentSuccessiveNoClicks`, `contentSearchesWithNoResult`, `contentSuccessiveNoResults`, `contentUnsuccessfulSearchSessionChart`, `contentHighConversion`, `contentHighConversionClicks`, `contentHighConversionSessions`, `contentArticleUsageByAgents`, `contentSuccessiveArticlesUsage`) with `contentGap*` helper fields. **Disambiguation:** *Search phrase → documents clicked (Top Clicked Searches)* → **conversionClickedResults** + **clickedResultsSearchQuery**. *Doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *Article URL from **Articles failed / deflected*** → **conversionSearchesCreatedCase** / **conversionSearchesOnDeflection** / **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Per-document “what searches led to clicks on this doc?”** → **conversionSearchesOnClick** + **clickedDocumentUrl**. **Per-search “what documents were clicked for this query?”** → **conversionClickedResults** + **clickedResultsSearchQuery**. **Case deflection:** **caseDeflectionArticleUrl** + **conversionSearchTypeArticle**; sessions: **caseDeflectionSessionsSuccessfulDeflection**. **Not** **conversionSessionTrackingDetails** for these. **Overview tab** (overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **Leadership dashboard:** `leadershipGetContentSources`, `leadershipUnassistedSelfSolveVolume`, `leadershipAssistedSelfSolveVolume`, `leadershipAssistedCaseVolume`, `leadershipDeflectionCount`, `leadershipCostSavingsDeflectionUsd`, `leadershipDeflectionCostSavingsDownload` — see `reportType` hint; **leadershipUseBackendLastSixQuarters** for admin default window; **leadershipCostPerCaseUsd** defaults to **200** when the user does not specify cost per case. Executive recipe orchestrations are not available as `reportType` here; use the `executive_business_query` tool for those. Search client uid comes from auth (optional ecoSystemId). MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it.";
 
 const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
   const c = async () => (getCreds ? await getCreds() : creds);
@@ -444,6 +591,23 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         clickedResultsSearchQuery,
         caseDeflectionArticleUrl,
         caseDeflectionSessionsSuccessfulDeflection,
+        contentGapSearchQuery,
+        contentGapText,
+        contentGapSortingField,
+        contentGapSortType,
+        contentGapOrderBy,
+        contentGapSearchGrouping,
+        contentGapActionStatusFilters,
+        contentGapSearchTextUrl,
+        contentGapCookie,
+        contentGapEmailId,
+        contentGapArticleTitleSearchQuery,
+        contentGapCaseSubjectSearchQuery,
+        leadershipUseBackendLastSixQuarters,
+        leadershipContentSourceIndexName,
+        leadershipCostPerCaseUsd,
+        leadershipCsvVariant,
+        directlyViewSetting,
       } = args;
       const credsForRequest = await c();
       if (!credsForRequest) {
@@ -591,11 +755,185 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         case reportTypes.tileDataContent: {
           console.error("tileDataContent triggered");
           const tileParams = {
-            searchClientId: credsForRequest.config.uid,
             startDate,
             endDate,
+            internalUser: internalUser ?? "all",
+            userMetricsFlag: args.userMetricsFlag,
+            userMetricsFilters: args.userMetricsFilters,
+            userMetricsLimit: args.userMetricsLimit,
+            userMetricsOffset: args.userMetricsOffset,
           };
+          if (args.ecoSystemId) {
+            tileParams.ecoSystemId = args.ecoSystemId;
+          } else {
+            tileParams.searchClientId = credsForRequest.config.uid;
+          }
           analyticsResponse = await Analytics.getTileDataContent(tileParams);
+          break;
+        }
+        case reportTypes.contentSplitTileDataContent: {
+          console.error("contentSplitTileDataContent triggered");
+          if (!args.ecoSystemId) {
+            return jsonTextResult({
+              error:
+                "contentSplitTileDataContent requires ecoSystemId (admin /content/splitTileDataContent is ecosystem-only).",
+            });
+          }
+          analyticsResponse = await Analytics.postContentSplitTileDataContent({
+            ...conversionPostBase(args, credsForRequest),
+            ecoId: args.ecoSystemId,
+            uid: null,
+          });
+          break;
+        }
+        case reportTypes.contentUnsuccessfulSummaryChart: {
+          console.error("contentUnsuccessfulSummaryChart triggered");
+          analyticsResponse = await Analytics.postContentUnsuccessfulSummaryChart(
+            conversionPostBase(args, credsForRequest)
+          );
+          break;
+        }
+        case reportTypes.contentSearchesWithNoClicks: {
+          console.error("contentSearchesWithNoClicks triggered");
+          analyticsResponse = await Analytics.postOverviewSearchesWithNoClicks({
+            ...conversionPostBase(args, credsForRequest),
+            searchQuery: contentGapSearchQuery ?? "",
+            sortingField: contentGapSortingField ?? "Searches",
+            sortType: String(contentGapSortType ?? "desc").toLowerCase(),
+            offset: conversionDetailOffset ?? pageNumber ?? 1,
+            limit: conversionDetailLimit ?? count ?? 50,
+            searchGrouping: contentGapSearchGrouping ?? false,
+          });
+          break;
+        }
+        case reportTypes.contentSuccessiveNoClicks: {
+          console.error("contentSuccessiveNoClicks triggered");
+          const txt = contentGapText?.trim();
+          if (!txt) {
+            return jsonTextResult({
+              error:
+                "contentGapText is required for contentSuccessiveNoClicks (selected keyword text from contentSearchesWithNoClicks row).",
+            });
+          }
+          analyticsResponse = await Analytics.postContentSuccessiveNoClicks({
+            ...conversionPostBase(args, credsForRequest),
+            text: txt,
+          });
+          break;
+        }
+        case reportTypes.contentSearchesWithNoResult: {
+          console.error("contentSearchesWithNoResult triggered");
+          analyticsResponse = await Analytics.postOverviewSearchesWithNoResult({
+            ...conversionPostBase(args, credsForRequest),
+            searchQuery: contentGapSearchQuery ?? "",
+            sortingField: contentGapSortingField ?? "Searches",
+            sortType: String(contentGapSortType ?? "desc").toLowerCase(),
+            offset: conversionDetailOffset ?? pageNumber ?? 1,
+            limit: conversionDetailLimit ?? count ?? 50,
+            searchGrouping: contentGapSearchGrouping ?? false,
+            actionStatusFilters: contentGapActionStatusFilters ?? [],
+          });
+          break;
+        }
+        case reportTypes.contentSuccessiveNoResults: {
+          console.error("contentSuccessiveNoResults triggered");
+          const txt = contentGapText?.trim();
+          if (!txt) {
+            return jsonTextResult({
+              error:
+                "contentGapText is required for contentSuccessiveNoResults (selected keyword text from contentSearchesWithNoResult row).",
+            });
+          }
+          analyticsResponse = await Analytics.postContentSuccessiveNoResults({
+            ...conversionPostBase(args, credsForRequest),
+            text: txt,
+          });
+          break;
+        }
+        case reportTypes.contentUnsuccessfulSearchSessionChart: {
+          console.error("contentUnsuccessfulSearchSessionChart triggered");
+          analyticsResponse = await Analytics.postContentUnsuccessfulSearchSessionChart(
+            conversionPostBase(args, credsForRequest)
+          );
+          break;
+        }
+        case reportTypes.contentHighConversion: {
+          console.error("contentHighConversion triggered");
+          analyticsResponse = await Analytics.postContentHighConversion({
+            ...conversionPostBase(args, credsForRequest),
+            searchQuery: contentGapSearchQuery ?? "",
+            offset: conversionDetailOffset ?? pageNumber ?? 1,
+            sortingField: contentGapSortingField ?? "click",
+            sortType: String(contentGapSortType ?? "desc").toLowerCase(),
+          });
+          break;
+        }
+        case reportTypes.contentHighConversionClicks: {
+          console.error("contentHighConversionClicks triggered");
+          const searchText = contentGapSearchTextUrl?.trim();
+          if (!searchText) {
+            return jsonTextResult({
+              error:
+                "contentGapSearchTextUrl is required for contentHighConversionClicks (selected `url` from contentHighConversion row; maps to `searchText`).",
+            });
+          }
+          analyticsResponse = await Analytics.postContentHighConversionClicks({
+            ...conversionPostBase(args, credsForRequest),
+            searchText,
+            searchQuery: contentGapSearchQuery ?? "",
+            offset: conversionDetailOffset ?? pageNumber ?? 1,
+            sortingField: contentGapSortingField ?? "search_count",
+            sortType: String(contentGapSortType ?? "desc").toLowerCase(),
+          });
+          break;
+        }
+        case reportTypes.contentHighConversionSessions: {
+          console.error("contentHighConversionSessions triggered");
+          const searchText = contentGapSearchTextUrl?.trim();
+          if (!searchText) {
+            return jsonTextResult({
+              error:
+                "contentGapSearchTextUrl is required for contentHighConversionSessions (selected `url` from contentHighConversion row; maps to `searchText`).",
+            });
+          }
+          analyticsResponse = await Analytics.postContentHighConversionSessions({
+            ...conversionPostBase(args, credsForRequest),
+            searchText,
+            searchQuery: contentGapSearchQuery ?? "",
+            cookie: contentGapCookie ?? "",
+            emailId: contentGapEmailId ?? "",
+            offset: conversionDetailOffset ?? pageNumber ?? 1,
+            limit: conversionDetailLimit ?? count ?? 10,
+            sortingField: contentGapSortingField ?? "activity_time",
+            sortType: String(contentGapSortType ?? "desc").toLowerCase(),
+          });
+          break;
+        }
+        case reportTypes.contentArticleUsageByAgents: {
+          console.error("contentArticleUsageByAgents triggered");
+          analyticsResponse = await Analytics.postContentArticleUsageByAgents({
+            ...conversionPostBase(args, credsForRequest),
+            orderBy: String(contentGapOrderBy ?? "DESC").toUpperCase(),
+            searchQuery: contentGapSearchQuery ?? "",
+          });
+          break;
+        }
+        case reportTypes.contentSuccessiveArticlesUsage: {
+          console.error("contentSuccessiveArticlesUsage triggered");
+          const txt = contentGapText?.trim();
+          if (!txt) {
+            return jsonTextResult({
+              error:
+                "contentGapText is required for contentSuccessiveArticlesUsage (selected agent email from contentArticleUsageByAgents row).",
+            });
+          }
+          analyticsResponse = await Analytics.postContentSuccessiveArticlesUsage({
+            ...conversionPostBase(args, credsForRequest),
+            text: txt,
+            orderBy: String(contentGapOrderBy ?? "DESC").toUpperCase(),
+            articleTitleSearchQuery: contentGapArticleTitleSearchQuery ?? "",
+            caseSubjectSearchQuery: contentGapCaseSubjectSearchQuery ?? "",
+          });
           break;
         }
         case reportTypes.tileDataMetrics1: {
@@ -948,6 +1286,98 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
             linkedByText: shareResultsLinkedBy ?? "",
           };
           analyticsResponse = await Analytics.postConversionLinkSharing(lsBody);
+          break;
+        }
+        case reportTypes.leadershipGetContentSources: {
+          analyticsResponse = await Analytics.postLeadershipGetContentSources({});
+          break;
+        }
+        case reportTypes.leadershipUnassistedSelfSolveVolume: {
+          const ussvBody = leadershipUidEcoBody(args, credsForRequest);
+          if (directlyViewSetting !== undefined) {
+            ussvBody.directlyViewSetting = Boolean(directlyViewSetting);
+          }
+          analyticsResponse = await Analytics.postLeadershipUnassistedSelfSolveVolume(ussvBody);
+          break;
+        }
+        case reportTypes.leadershipAssistedSelfSolveVolume: {
+          analyticsResponse = await Analytics.postLeadershipAssistedSelfSolveVolume(
+            leadershipUidEcoBody(args, credsForRequest)
+          );
+          break;
+        }
+        case reportTypes.leadershipAssistedCaseVolume: {
+          const acvBody = {
+            internalUser: internalUser ?? "all",
+            ...leadershipOptionalFromTo(args),
+          };
+          if (leadershipContentSourceIndexName && String(leadershipContentSourceIndexName).trim() !== "") {
+            acvBody.indexName = String(leadershipContentSourceIndexName).trim();
+          }
+          analyticsResponse = await Analytics.postLeadershipAssistedCaseVolume(acvBody);
+          break;
+        }
+        case reportTypes.leadershipDeflectionCount: {
+          analyticsResponse = await Analytics.postLeadershipDeflectionCount(
+            leadershipUidEcoBody(args, credsForRequest)
+          );
+          break;
+        }
+        case reportTypes.leadershipCostSavingsDeflectionUsd: {
+          const rawCounts = await Analytics.postLeadershipDeflectionCount(
+            leadershipUidEcoBody(args, credsForRequest)
+          );
+          if (rawCounts?.status === false) {
+            analyticsResponse = rawCounts;
+            break;
+          }
+          const rows = Array.isArray(rawCounts?.data) ? rawCounts.data : [];
+          const costUsd =
+            leadershipCostPerCaseUsd != null && !Number.isNaN(Number(leadershipCostPerCaseUsd))
+              ? Number(leadershipCostPerCaseUsd)
+              : 200;
+          const enriched = rows.map((row) => {
+            const explicitN = Number(row.explicit_deflection_count);
+            const implicitN = Number(row.implicit_deflection_count);
+            const explicitUsd = leadershipUsdRound2(
+              (Number.isFinite(explicitN) ? explicitN : 0) * costUsd
+            );
+            const implicitUsd = leadershipUsdRound2(
+              (Number.isFinite(implicitN) ? implicitN : 0) * costUsd
+            );
+            return {
+              ...row,
+              explicit_deflection_cost_savings_usd: explicitUsd,
+              implicit_deflection_cost_savings_usd: implicitUsd,
+              total_deflection_cost_savings_usd: leadershipUsdRound2(explicitUsd + implicitUsd),
+            };
+          });
+          analyticsResponse = {
+            status: true,
+            data: {
+              cost_per_case_usd_used: costUsd,
+              window:
+                leadershipUseBackendLastSixQuarters === true
+                  ? "analytics_default_last_six_quarters"
+                  : { from: `${startDate} 00:00:00`, to: `${endDate} 23:59:59` },
+              note:
+                "Explicit and implicit USD columns match the admin Leadership cost-savings chart (counts × cost per case). Confirm which quarter(s) the user cares about; underlying rollups are quarterly (typically up to six quarters).",
+              rows: enriched,
+            },
+          };
+          break;
+        }
+        case reportTypes.leadershipDeflectionCostSavingsDownload: {
+          const costDl =
+            leadershipCostPerCaseUsd != null && !Number.isNaN(Number(leadershipCostPerCaseUsd))
+              ? Number(leadershipCostPerCaseUsd)
+              : 200;
+          analyticsResponse = await Analytics.postLeadershipDeflectionCostSavingsDownload({
+            ...leadershipUidEcoBody(args, credsForRequest),
+            costPerCase: costDl,
+            csv: leadershipCsvVariant ?? 1,
+            sendToEmail: 0,
+          });
           break;
         }
         default:
