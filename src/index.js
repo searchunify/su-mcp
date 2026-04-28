@@ -534,6 +534,13 @@ async function runHttp(creds, port) {
     next();
   });
 
+  // OpenAI domain verification — serves the challenge token at the well-known URL
+  app.get("/.well-known/openai-apps-challenge", (req, res) => {
+    const token = process.env.OPENAI_DOMAIN_VERIFICATION_TOKEN;
+    if (!token) return res.status(404).end();
+    res.type("text/plain").send(token);
+  });
+
   // General rate limit for MCP tool-call endpoints — generous to avoid blocking active users
   const mcpRateLimit = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
