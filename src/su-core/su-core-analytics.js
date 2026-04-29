@@ -159,6 +159,31 @@ const reportTypes = {
   ...(ENABLE_EXECUTIVE_RECIPE_REPORTS ? RECIPES : {}),
 };
 
+/** Leadership `reportType`s that may omit `from`/`to` when **leadershipUseBackendLastSixQuarters** is true. */
+const LEADERSHIP_OPTIONAL_FROM_TO_REPORT_TYPES = new Set([
+  reportTypes.leadershipUnassistedSelfSolveVolume,
+  reportTypes.leadershipAssistedSelfSolveVolume,
+  reportTypes.leadershipAssistedCaseVolume,
+  reportTypes.leadershipDeflectionCount,
+  reportTypes.leadershipCostSavingsDeflectionUsd,
+  reportTypes.leadershipDeflectionCostSavingsDownload,
+]);
+
+function analyticsStartEndDatesSatisfied(data) {
+  if (data.reportType === reportTypes.leadershipGetContentSources) {
+    return true;
+  }
+  if (
+    LEADERSHIP_OPTIONAL_FROM_TO_REPORT_TYPES.has(data.reportType) &&
+    data.leadershipUseBackendLastSixQuarters === true
+  ) {
+    return true;
+  }
+  const s = data.startDate;
+  const e = data.endDate;
+  return typeof s === "string" && s.trim() !== "" && typeof e === "string" && e.trim() !== "";
+}
+
 /**
  * Overview-tab + LLM feedback `reportType` values — each has a dedicated `switch` branch that passes only
  * keys allowed by `su-sdk-js` Joi (`analytics-validation.js`). Never spread full `args` into the SDK.
@@ -346,7 +371,7 @@ const contentGapReportRoutingHint =
   "**Content-gap routing:** (1) **Tile Data Content Gap** → **tileDataContent** (ecosystem split rows: **contentSplitTileDataContent**, eco only). (2) **Unsuccessful Searches** chart → **contentUnsuccessfulSummaryChart**. (3) **Overview → Search Report:** when the user says **all searches** or **top searches** (the main keyword list, not Conversions *Top Clicked Searches*), use **overviewTopSearches** (`POST /overview/topSearches`); when they say **successful searches**, use **overviewSearchSessions** (`POST /overview/searchSessions`). **Search Classifications:** no-click → **contentSearchesWithNoClicks**; no-result → **contentSearchesWithNoResult** — for these four `POST /overview/*` routes only, su-mcp sends `searchGrouping: false` unless **contentGapSearchGrouping** is explicitly `true`. Their sub-report “next/successive searches for selected keyword” uses **contentSuccessiveNoClicks** or **contentSuccessiveNoResults** with **contentGapText** set to that selected keyword. (4) **Sessions with unsuccessful searches** → **contentUnsuccessfulSearchSessionChart**. (5) **High Conversion Results Not on Page One** main grid → **contentHighConversion**; selected row clicks → **contentHighConversionClicks** with **contentGapSearchTextUrl**; selected row sessions → **contentHighConversionSessions** with **contentGapSearchTextUrl** (plus optional cookie/email/search query filters). (6) **Articles Usage By Agents** main grid → **contentArticleUsageByAgents**; sub-report attached articles for selected agent → **contentSuccessiveArticlesUsage** with **contentGapText** set to agent email.";
 
 const leadershipReportRoutingHint =
-  "**Leadership dashboard (admin):** rollup data is **quarterly**; without explicit dates the analytics service defaults to the **last six completed quarters**. **Always** ask the user which quarter or date range they care about, and say the series may span up to six quarters. **leadershipUseBackendLastSixQuarters** `true` → omit `from`/`to` (same default window as the charts); otherwise **startDate**/**endDate** map to `from`/`to`. **Unassisted Self Solve Volume** (implicit deflection volume, self-solve rate, etc.) → **leadershipUnassistedSelfSolveVolume**; set **directlyViewSetting** `true` only when the org uses “All sessions” direct-view semantics (mirrors admin). **Assisted Self Solve Volume** (explicit deflection / KM metrics) → **leadershipAssistedSelfSolveVolume**. **Assisted Case Volume** → **leadershipAssistedCaseVolume**; optional **leadershipContentSourceIndexName** = `elasticIndexName` from **leadershipGetContentSources**. **Cost savings (USD)** from deflection counts → **leadershipCostSavingsDeflectionUsd** (ask for **leadershipCostPerCaseUsd**; if the user does not give a value use **200**). Raw counts only → **leadershipDeflectionCount**. **CSV export** → **leadershipDeflectionCostSavingsDownload** + **leadershipCostPerCaseUsd** (default 200) + **leadershipCsvVariant** (default 1). `/leadership/*` may need admin/BFF `analytics-secret` when proxied.";
+  "**Leadership dashboard (admin):** rollup data is **quarterly**; without explicit dates the analytics service defaults to the **last six completed quarters**. **Always** ask the user which quarter or date range they care about, and say the series may span up to six quarters. **leadershipUseBackendLastSixQuarters** `true` → omit `from`/`to` on the API (and you may **omit startDate/endDate** on the MCP tool—validation allows it for leadership USSV/ASSV/assisted-case/deflection reportTypes); otherwise **startDate**/**endDate** are **required** and map to `from`/`to`. **leadershipGetContentSources** does not use a date window—**startDate**/**endDate** may be omitted. **Unassisted Self Solve Volume** (implicit deflection volume, self-solve rate, etc.) → **leadershipUnassistedSelfSolveVolume**; set **directlyViewSetting** `true` only when the org uses “All sessions” direct-view semantics (mirrors admin). **Assisted Self Solve Volume** (explicit deflection / KM metrics) → **leadershipAssistedSelfSolveVolume**. **Assisted Case Volume** → **leadershipAssistedCaseVolume**; optional **leadershipContentSourceIndexName** = `elasticIndexName` from **leadershipGetContentSources**. **Cost savings (USD)** from deflection counts → **leadershipCostSavingsDeflectionUsd** (ask for **leadershipCostPerCaseUsd**; if the user does not give a value use **200**). Raw counts only → **leadershipDeflectionCount**. **CSV export** → **leadershipDeflectionCostSavingsDownload** + **leadershipCostPerCaseUsd** (default 200) + **leadershipCsvVariant** (default 1). `/leadership/*` may need admin/BFF `analytics-secret` when proxied.";
 
 const reportTypeZodDescription = ENABLE_EXECUTIVE_RECIPE_REPORTS
   ? `Report id: raw API types (tileData*, search*, session*…) or the same \`recipeId\` values as \`executive_business_query\` (all Phase 1–3 orchestrations: traffic … su_gpt_attribution_deferred). ${conversionsReportRoutingHint} ${contentGapReportRoutingHint} ${leadershipReportRoutingHint}`
@@ -356,8 +381,18 @@ const baseAnalyticsFieldShape = {
   reportType: z
     .enum(allReportTypeEnumValues)
     .describe(reportTypeZodDescription),
-  startDate: z.string().describe("Start date in YYYY-MM-DD (also maps to executive `from`)."),
-  endDate: z.string().describe("End date in YYYY-MM-DD (also maps to executive `to`)."),
+  startDate: z
+    .string()
+    .optional()
+    .describe(
+      "Start date YYYY-MM-DD (maps to `from` / executive `from`). **Required** for most reportTypes. **Omit** for **leadershipGetContentSources**, or for leadership USSV/ASSV/assisted-case/deflection reportTypes when **leadershipUseBackendLastSixQuarters** is `true`."
+    ),
+  endDate: z
+    .string()
+    .optional()
+    .describe(
+      "End date YYYY-MM-DD (maps to `to` / executive `to`). Same optional rules as **startDate**."
+    ),
   count: z
     .number()
     .min(1)
@@ -542,7 +577,7 @@ const baseAnalyticsFieldShape = {
     .boolean()
     .optional()
     .describe(
-      "Leadership `reportType`s only: when true, omit `from`/`to` on the wire so analytics uses its built-in **last six quarters** rollup (matches admin Leadership charts). **startDate**/**endDate** are ignored in that mode. Otherwise map **startDate**/**endDate** to `from`/`to` for a custom quarter window. Always confirm with the user which quarter(s) they need."
+      "Leadership USSV/ASSV/assisted-case/deflection `reportType`s only: when `true`, omit `from`/`to` on the wire (analytics **last six quarters**) and you may omit **startDate**/**endDate** on this tool. When `false` or omitted, **startDate**/**endDate** are required for those reportTypes. Ignored for **leadershipGetContentSources**."
     ),
   leadershipContentSourceIndexName: z
     .string()
@@ -564,7 +599,8 @@ const baseAnalyticsFieldShape = {
     .describe("**leadershipDeflectionCostSavingsDownload** only: `csv` download format (default 1)."),
 };
 
-const analyticsInputSchema = ENABLE_EXECUTIVE_RECIPE_REPORTS
+/** MCP `server.tool` is registered with `.shape` only; Zod refinements on a full schema are not applied by the SDK. Date-window rules are enforced in the handler via **analyticsStartEndDatesSatisfied**. */
+const analyticsInputSchemaBase = ENABLE_EXECUTIVE_RECIPE_REPORTS
   ? z.object(baseAnalyticsFieldShape).merge(executiveOptionsForAnalyticsTool)
   : z.object(baseAnalyticsFieldShape);
 
@@ -577,7 +613,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
   server.tool(
     "analytics",
     analyticsToolDescription,
-    analyticsInputSchema.shape,
+    analyticsInputSchemaBase.shape,
     {
       title: "Analytics",
       readOnlyHint: true,
@@ -653,6 +689,14 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
             },
           ],
         };
+      }
+      if (!analyticsStartEndDatesSatisfied(args)) {
+        return jsonTextResult({
+          error: "invalid_analytics_date_window",
+          message:
+            "startDate and endDate (YYYY-MM-DD) are required unless reportType is leadershipGetContentSources, or a leadership USSV/ASSV/assisted-case/deflection report with leadershipUseBackendLastSixQuarters true.",
+          reportType: args.reportType,
+        });
       }
       const Analytics = credsForRequest.suRestClient.Analytics();
 
