@@ -247,9 +247,9 @@ function leadershipVolumeBody(input, creds) {
     to: input.leadershipTo,
   };
   if (input.ecoId) {
-    return { ...base, ecoId: input.ecoId, uid: null };
+    return { ...base, ecoId: input.ecoId };
   }
-  return { ...base, uid: input.uid ?? creds.config.uid, ecoId: null };
+  return { ...base, uid: input.uid ?? creds.config.uid };
 }
 
 function articleTableParams(input, creds) {

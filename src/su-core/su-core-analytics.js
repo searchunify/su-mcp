@@ -249,9 +249,9 @@ function leadershipUidEcoBody(args, credsForRequest) {
   const internalUser = args.internalUser ?? "all";
   const base = { internalUser, ...leadershipOptionalFromTo(args) };
   if (args.ecoSystemId) {
-    return { ...base, ecoId: args.ecoSystemId, uid: null };
+    return { ...base, ecoId: args.ecoSystemId };
   }
-  return { ...base, uid: credsForRequest.config.uid, ecoId: null };
+  return { ...base, uid: credsForRequest.config.uid };
 }
 
 function leadershipUsdRound2(n) {
