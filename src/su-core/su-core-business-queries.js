@@ -115,7 +115,7 @@ const businessQueryInput = baseContext.extend({
   includeLeadershipCostSavingsCsv: z
     .boolean()
     .optional()
-    .describe("roi_case_deflection: also call POST /leadership/deflection-cost-savings-download (returns CSV text in subcall data when ok)."),
+    .describe("roi_case_deflection: also call POST /api/v2/leadership/deflection-cost-savings-download (returns CSV text in subcall data when ok)."),
   costPerCase: z
     .number()
     .positive()
@@ -128,7 +128,7 @@ const businessQueryInput = baseContext.extend({
   includeLeadershipDeflectionCountInSavings: z
     .boolean()
     .optional()
-    .describe("savings_from_conversion: also POST /leadership/deflection-count with the same from/to as the conversion tile window."),
+    .describe("savings_from_conversion: also POST /api/v2/leadership/deflection-count with the same from/to as the conversion tile window."),
   conversionSummaryLimit: z.number().min(1).max(500).optional(),
   conversionSummaryOffset: z.number().min(1).optional(),
   sessionListCount: z
@@ -416,7 +416,7 @@ async function runSelfSolveRateRecipe(input, creds) {
   const out = {
     recipeId: RECIPES.self_solve_rate,
     summary:
-      "Self-solve: primary signal from POST /api/v2/conversion/caseDeflectionStage1 (stage 1). Optional quarterly USSV/ASSV from /leadership/* when includeLeadershipQuarterly is true (requires traffic through admin or another BFF that injects `analytics-secret` on upstream analytics calls).",
+      "Self-solve: primary signal from POST /api/v2/conversion/caseDeflectionStage1 (stage 1). Optional quarterly USSV/ASSV from `/api/v2/leadership/*` when includeLeadershipQuarterly is true (requires traffic through admin or another BFF that injects `analytics-secret` on upstream analytics calls).",
     definitions: {
       primary: "Stage-1 session analytics (conversion.caseDeflectionStage1).",
       secondary:
@@ -776,7 +776,7 @@ async function runCommunityContentCtrRecipe(input, creds) {
   return {
     recipeId: RECIPES.community_content_ctr,
     summary:
-      "Facet discovery via POST /leadership/get-content-sources plus POST /api/v2/conversion/clicksCountContentSource. Map community content sources to Name__1 labels using tenant metadata; then pass communityNameHints (and optional baselineNameHints) for segmented click totals.",
+      "Facet discovery via POST /api/v2/leadership/get-content-sources plus POST /api/v2/conversion/clicksCountContentSource. Map community content sources to Name__1 labels using tenant metadata; then pass communityNameHints (and optional baselineNameHints) for segmented click totals.",
     leadershipQuery: leadershipBody,
     clicksQuery: clicksBody,
     subcalls: [
@@ -853,7 +853,7 @@ export const initializeExecutiveBusinessQueryTools = async ({
 
   server.tool(
     "executive_business_query",
-    "Executive analytics recipes: Phase 1 (traffic, search-no-click, relevance, content gap, self-solve), Phase 2 (ROI deflection count + optional savings CSV, savings vs conversion summary, sessions without self-service, stage1 direct-view trends, stage2 deflection + optional worst-article list), Phase 3 (article contrast, attach+journey, community CTR slice, top-case proxy, SU-GPT deferral). Per-subcall ok/statusCode in JSON. `/leadership/*` needs admin/BFF `analytics-secret` when routed through admin. MCP does not send `tenantId` on any request (same as raw `analytics` session/tile routes). See analytics/docs/business-queries/.",
+    "Executive analytics recipes: Phase 1 (traffic, search-no-click, relevance, content gap, self-solve), Phase 2 (ROI deflection count + optional savings CSV, savings vs conversion summary, sessions without self-service, stage1 direct-view trends, stage2 deflection + optional worst-article list), Phase 3 (article contrast, attach+journey, community CTR slice, top-case proxy, SU-GPT deferral). Per-subcall ok/statusCode in JSON. `/api/v2/leadership/*` (and legacy `/leadership/*`) need `analytics-secret` on the analytics service; admin’s `/api/v2/*` proxy injects it when the path contains `leadership`. MCP does not send `tenantId` on any request (same as raw `analytics` session/tile routes). See analytics/docs/business-queries/.",
     businessQueryInput.shape,
     async (args) => {
       const credsForRequest = await Promise.resolve(c());
