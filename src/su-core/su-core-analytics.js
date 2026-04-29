@@ -21,6 +21,26 @@ import {
 } from "./su-core-business-queries.js";
 import { ENABLE_EXECUTIVE_RECIPE_REPORTS } from "./executive-recipes-config.js";
 
+/** Admin content-gap "Searches with no result" default `actionStatusFilters` when MCP omits `contentGapActionStatusFilters`. */
+const DEFAULT_SEARCHES_WITH_NO_RESULT_ACTION_STATUS_FILTERS = [
+  "Pending",
+  "In Progress",
+  "Update Content",
+  "New Content",
+  "Add synonyms",
+  "No Action required",
+  "Completed",
+];
+
+/** `contentGapActionStatusFilters`: omitted, non-array, `[]`, or all-blank → defaults; otherwise trimmed non-empty strings (e.g. `["Pending"]`). */
+function resolvedContentGapActionStatusFilters(contentGapActionStatusFilters) {
+  if (!Array.isArray(contentGapActionStatusFilters)) {
+    return DEFAULT_SEARCHES_WITH_NO_RESULT_ACTION_STATUS_FILTERS;
+  }
+  const arr = contentGapActionStatusFilters.map(String).map((s) => s.trim()).filter(Boolean);
+  return arr.length > 0 ? arr : DEFAULT_SEARCHES_WITH_NO_RESULT_ACTION_STATUS_FILTERS;
+}
+
 const baseReportTypes = {
   searchQueryWithNoClicks: "searchQueryWithNoClicks",
   searchQueryWithResult: "searchQueryWithResult",
@@ -479,11 +499,15 @@ const baseAnalyticsFieldShape = {
   contentGapSearchGrouping: z
     .boolean()
     .optional()
-    .describe("Search Classifications grouping flag (`searchGrouping`) for /overview/searchsWithNoClicks and /overview/searchesWithNoResult."),
+    .describe(
+      "When explicitly true, sets `searchGrouping` for /overview/searchsWithNoClicks and /overview/searchesWithNoResult; otherwise su-mcp sends false (admin default)."
+    ),
   contentGapActionStatusFilters: z
     .array(z.string())
     .optional()
-    .describe("Optional actionStatusFilters array for contentSearchesWithNoResult."),
+    .describe(
+      "Activity/action status filter for **contentSearchesWithNoResult** → `actionStatusFilters`. Use `[]` or omit for the admin default list; pass values such as `[\"Pending\"]` to restrict."
+    ),
   contentGapSearchTextUrl: z
     .string()
     .optional()
@@ -802,7 +826,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
             sortType: String(contentGapSortType ?? "desc").toLowerCase(),
             offset: conversionDetailOffset ?? pageNumber ?? 1,
             limit: conversionDetailLimit ?? count ?? 50,
-            searchGrouping: contentGapSearchGrouping ?? false,
+            searchGrouping: contentGapSearchGrouping === true,
           });
           break;
         }
@@ -823,6 +847,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         }
         case reportTypes.contentSearchesWithNoResult: {
           console.error("contentSearchesWithNoResult triggered");
+          const actionStatusFilters = resolvedContentGapActionStatusFilters(contentGapActionStatusFilters);
           analyticsResponse = await Analytics.postOverviewSearchesWithNoResult({
             ...conversionPostBase(args, credsForRequest),
             searchQuery: contentGapSearchQuery ?? "",
@@ -830,8 +855,8 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
             sortType: String(contentGapSortType ?? "desc").toLowerCase(),
             offset: conversionDetailOffset ?? pageNumber ?? 1,
             limit: conversionDetailLimit ?? count ?? 50,
-            searchGrouping: contentGapSearchGrouping ?? false,
-            actionStatusFilters: contentGapActionStatusFilters ?? [],
+            searchGrouping: contentGapSearchGrouping === true,
+            actionStatusFilters,
           });
           break;
         }
