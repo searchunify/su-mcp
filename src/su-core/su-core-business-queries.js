@@ -15,7 +15,7 @@ const RECIPES = {
   relevance_rate: "relevance_rate",
   content_gap: "content_gap",
   self_solve_rate: "self_solve_rate",
-  /** Phase 2 — Q1: leadership deflection counts (+ optional cost-savings CSV). */
+  /** Phase 2 — Q1: leadership deflection counts (CSV download not exposed via MCP). */
   roi_case_deflection: "roi_case_deflection",
   /** Phase 2 — Q2: tileDataMetrics2 + conversionSummary; optional leadership deflection-count for alignment. */
   savings_from_conversion: "savings_from_conversion",
@@ -96,7 +96,7 @@ const businessQueryInput = baseContext.extend({
     .boolean()
     .optional()
     .describe(
-      "self_solve_rate: also call leadership USSV + ASSV (requires `instance` to route through admin or another proxy that adds `analytics-secret` upstream to analytics)."
+      "self_solve_rate: also call leadership USSV + ASSV via POST /api/v2/leadership/* (same auth as other /api/v2 analytics calls)."
     ),
   leadershipFrom: z
     .string()
@@ -112,19 +112,6 @@ const businessQueryInput = baseContext.extend({
     .boolean()
     .optional()
     .describe("self_solve_rate USSV: maps to `directlyViewSetting` on leadership API."),
-  includeLeadershipCostSavingsCsv: z
-    .boolean()
-    .optional()
-    .describe("roi_case_deflection: also call POST /api/v2/leadership/deflection-cost-savings-download (returns CSV text in subcall data when ok)."),
-  costPerCase: z
-    .number()
-    .positive()
-    .optional()
-    .describe("roi_case_deflection: dollars per deflected case for leadership cost-savings CSV (finance-owned)."),
-  leadershipCsvExportFormat: z
-    .union([z.literal(0), z.literal(1), z.literal(4)])
-    .optional()
-    .describe("roi_case_deflection: `csv` parameter for deflection-cost-savings-download (default 4)."),
   includeLeadershipDeflectionCountInSavings: z
     .boolean()
     .optional()
@@ -416,7 +403,7 @@ async function runSelfSolveRateRecipe(input, creds) {
   const out = {
     recipeId: RECIPES.self_solve_rate,
     summary:
-      "Self-solve: primary signal from POST /api/v2/conversion/caseDeflectionStage1 (stage 1). Optional quarterly USSV/ASSV from `/api/v2/leadership/*` when includeLeadershipQuarterly is true (requires traffic through admin or another BFF that injects `analytics-secret` on upstream analytics calls).",
+      "Self-solve: primary signal from POST /api/v2/conversion/caseDeflectionStage1 (stage 1). Optional quarterly USSV/ASSV from `/api/v2/leadership/*` when includeLeadershipQuarterly is true.",
     definitions: {
       primary: "Stage-1 session analytics (conversion.caseDeflectionStage1).",
       secondary:
@@ -475,34 +462,10 @@ async function runRoiCaseDeflectionRecipe(input, creds) {
       data: rCount.ok ? rCount.data : undefined,
     },
   ];
-  if (input.includeLeadershipCostSavingsCsv) {
-    if (input.costPerCase === undefined || input.costPerCase === null) {
-      subcalls.push({
-        id: "leadershipDeflectionCostSavingsDownload",
-        ok: false,
-        statusCode: 0,
-        error:
-          "costPerCase is required when includeLeadershipCostSavingsCsv is true (finance-owned dollars per case).",
-      });
-    } else {
-      const dl = await A.postLeadershipDeflectionCostSavingsDownload({
-        ...leadershipBase,
-        costPerCase: input.costPerCase,
-        csv: input.leadershipCsvExportFormat ?? 4,
-        sendToEmail: 0,
-      });
-      const rDl = normalizeSdkResult(dl);
-      subcalls.push({
-        id: "leadershipDeflectionCostSavingsDownload",
-        ...rDl,
-        data: rDl.ok ? rDl.data : undefined,
-      });
-    }
-  }
   return {
     recipeId: RECIPES.roi_case_deflection,
     summary:
-      "Leadership implicit/explicit deflection counts for ROI narratives. Optional CSV from deflection-cost-savings-download when costPerCase is supplied. Net ROI denominators (platform cost, staffing) are outside analytics — align with finance.",
+      "Leadership implicit/explicit deflection counts for ROI narratives. Net ROI denominators (platform cost, staffing) are outside analytics — align with finance.",
     definitions: {
       financeBoundary:
         "Analytics exposes deflection volumes and optional cost lines; executives combine with finance models for net ROI.",
@@ -853,7 +816,7 @@ export const initializeExecutiveBusinessQueryTools = async ({
 
   server.tool(
     "executive_business_query",
-    "Executive analytics recipes: Phase 1 (traffic, search-no-click, relevance, content gap, self-solve), Phase 2 (ROI deflection count + optional savings CSV, savings vs conversion summary, sessions without self-service, stage1 direct-view trends, stage2 deflection + optional worst-article list), Phase 3 (article contrast, attach+journey, community CTR slice, top-case proxy, SU-GPT deferral). Per-subcall ok/statusCode in JSON. `/api/v2/leadership/*` (and legacy `/leadership/*`) need `analytics-secret` on the analytics service; admin’s `/api/v2/*` proxy injects it when the path contains `leadership`. MCP does not send `tenantId` on any request (same as raw `analytics` session/tile routes). See analytics/docs/business-queries/.",
+    "Executive analytics recipes: Phase 1 (traffic, search-no-click, relevance, content gap, self-solve), Phase 2 (ROI deflection count, savings vs conversion summary, sessions without self-service, stage1 direct-view trends, stage2 deflection + optional worst-article list), Phase 3 (article contrast, attach+journey, community CTR slice, top-case proxy, SU-GPT deferral). Per-subcall ok/statusCode in JSON. `POST /api/v2/leadership/*` uses the same auth as other `/api/v2/*` mirrors; legacy `POST /leadership/*` still requires `analytics-secret` on the analytics host. Leadership CSV/email download is not exposed via MCP. MCP does not send `tenantId` on any request (same as raw `analytics` session/tile routes). See analytics/docs/business-queries/.",
     businessQueryInput.shape,
     async (args) => {
       const credsForRequest = await Promise.resolve(c());
