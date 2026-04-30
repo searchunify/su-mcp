@@ -196,11 +196,207 @@ MCP_TRANSPORT=both node src/index.js
 
 ## Integration Types
 
-### Integration 1: Docker with `creds.json` (stdio)
+### Integration 1: `/mcp` — Claude Public Directory (OAuth, UI-based)
 
-This is the traditional local setup using Docker and a credentials file.
+The simplest way to get started. When you add the MCP server from Claude's directory, a browser-based form opens automatically to collect your credentials. Authentication is handled via OAuth 2.0 using a proxy flow — the MCP server delegates login to your SearchUnify instance. No API keys or passwords are stored in Claude.
 
-#### Step 1 -- Create `creds.json`
+> **Self-hosting:** If you are running your own instance of su-mcp (not using `mcp.searchunify.com`), you must also set `OAUTH_ENCRYPTION_KEY` (64-char hex, generate with `openssl rand -hex 32`), `MCP_ISSUER_URL` (public HTTPS URL of your server), and optionally `REDIS_URL` for persistent token storage before starting the server.
+
+**OAuth proxy flow:**
+```
+Claude → MCP /authorize (form) → SU login page → MCP /su-callback → Bearer token issued
+```
+
+#### Step 1 — Register an OAuth Client in SearchUnify Admin
+
+Before connecting, an OAuth client must be registered in your SearchUnify instance with the MCP server's callback URL as the `redirect_uri`.
+
+1. Log in to your SearchUnify Admin panel
+2. Navigate to **OAuth Clients** (usually under Settings or Developer)
+3. Create a new OAuth client with:
+   - **Name:** e.g. `Claude MCP Connector`
+   - **Redirect URI:** `<MCP_ISSUER_URL>/su-callback`  
+     e.g. `https://mcp.searchunify.com/su-callback`
+   - **Grant Types:** `authorization_code`
+   - **Scope:** `All` (or the scopes required for search and analytics)
+4. Note the generated **Client ID** and **Client Secret** — users will need these when connecting
+
+---
+
+#### Step 2 — Connect from Claude
+
+When a user connects via Claude's directory:
+
+1. Claude opens the SearchUnify connection form in the browser
+2. The user enters:
+   - **SearchUnify Instance URL** — e.g. `https://your-instance.searchunify.com`
+   - **Search Client UID** — found in SearchUnify Admin → Search Clients
+   - **OAuth Client ID** — from the client registered in Step 1
+   - **OAuth Client Secret** — from the client registered in Step 1
+3. The user is redirected to their SearchUnify login page
+4. After login, an MCP Bearer token is issued and all tools are available in Claude
+
+---
+
+### Integration 2: `mcp-remote` — Remote HTTP with Header Auth
+
+Connect to the hosted MCP server over HTTP using [`mcp-remote`](https://www.npmjs.com/package/mcp-remote). Credentials are passed as HTTP headers on every request directly in the Claude Desktop config — no browser form, no separate credentials file.
+
+**Requires Node.js 24** on the machine running Claude Desktop.
+
+> **Endpoint note:** Use the root URL (`https://mcp.searchunify.com/`) — not `/mcp`. On OAuth-enabled servers the `/mcp` endpoint requires a Bearer token; the root endpoint (`/`) always accepts header-based credentials for backward compatibility.
+
+#### Claude Desktop Configuration
+
+Locate the Claude Desktop configuration file:
+
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+Add the following entry to the `mcpServers` section:
+
+```json
+{
+  "mcpServers": {
+    "su-mcp": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.searchunify.com/",
+        "--header",
+        "searchunify-instance:<searchunify_instance_url>",
+        "--header",
+        "searchunify-timeout:60000",
+        "--header",
+        "searchunify-auth-type:<apiKey|password|clientCredentials>",
+        "--header",
+        "searchunify-api-key:<your_api_key>",
+        "--header",
+        "searchunify-uid:<search_client_uid>"
+      ]
+    }
+  }
+}
+```
+
+#### HTTP Header Reference
+
+All header names use the `searchunify-` prefix (lowercase):
+
+| Header | Required | Description |
+|--------|----------|-------------|
+| `searchunify-instance` | Yes | Your SearchUnify instance URL (e.g. `https://your-instance.searchunify.com`). |
+| `searchunify-uid` | Yes | Search Client UID. |
+| `searchunify-auth-type` | Yes | Authentication method: `apiKey`, `password`, or `clientCredentials`. |
+| `searchunify-timeout` | No | Request timeout in milliseconds. Defaults to `60000`. |
+
+**Additional headers by auth type:**
+
+| Auth Type | Additional Headers |
+|-----------|-------------------|
+| `apiKey` | `searchunify-api-key` — Your API key. |
+| `password` | `searchunify-oauth-username`, `searchunify-oauth-password`, `searchunify-oauth-client-id`, `searchunify-oauth-client-secret` |
+| `clientCredentials` | `searchunify-oauth-client-id`, `searchunify-oauth-client-secret` |
+
+> **Note:** When HTTP headers are present and valid, they take priority over any `creds.json` file on the server. If headers are missing or incomplete, the server falls back to `creds.json`.
+
+#### Example: API Key Authentication
+
+```json
+{
+  "mcpServers": {
+    "su-mcp": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.searchunify.com/",
+        "--header",
+        "searchunify-instance:https://your-instance.searchunify.com",
+        "--header",
+        "searchunify-timeout:60000",
+        "--header",
+        "searchunify-auth-type:apiKey",
+        "--header",
+        "searchunify-api-key:<your_api_key>",
+        "--header",
+        "searchunify-uid:<search_client_uid>"
+      ]
+    }
+  }
+}
+```
+
+#### Example: Password Authentication
+
+```json
+{
+  "mcpServers": {
+    "su-mcp": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.searchunify.com/",
+        "--header",
+        "searchunify-instance:https://your-instance.searchunify.com",
+        "--header",
+        "searchunify-timeout:60000",
+        "--header",
+        "searchunify-auth-type:password",
+        "--header",
+        "searchunify-oauth-username:<your_email>",
+        "--header",
+        "searchunify-oauth-password:<your_password>",
+        "--header",
+        "searchunify-oauth-client-id:<your_client_id>",
+        "--header",
+        "searchunify-oauth-client-secret:<your_client_secret>",
+        "--header",
+        "searchunify-uid:<search_client_uid>"
+      ]
+    }
+  }
+}
+```
+
+#### Example: Client Credentials Authentication
+
+```json
+{
+  "mcpServers": {
+    "su-mcp": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.searchunify.com/",
+        "--header",
+        "searchunify-instance:https://your-instance.searchunify.com",
+        "--header",
+        "searchunify-timeout:60000",
+        "--header",
+        "searchunify-auth-type:clientCredentials",
+        "--header",
+        "searchunify-oauth-client-id:<your_client_id>",
+        "--header",
+        "searchunify-oauth-client-secret:<your_client_secret>",
+        "--header",
+        "searchunify-uid:<search_client_uid>"
+      ]
+    }
+  }
+}
+```
+
+#### Restart Claude Desktop
+
+Fully quit (**Cmd+Q** on macOS) and reopen Claude Desktop to apply the updated configuration.
+
+---
+
+### Integration 3: Docker (stdio with `creds.json`)
+
+Run the MCP server locally via Docker. The MCP config goes in the Claude Desktop config file; authentication credentials go in a separate `creds.json` file that is volume-mounted into the container.
+
+#### Step 1 — Create `creds.json`
 
 Choose one of the following formats based on your authentication method:
 
@@ -248,7 +444,7 @@ Choose one of the following formats based on your authentication method:
 }
 ```
 
-#### Step 2 -- Configure Claude Desktop
+#### Step 2 — Configure Claude Desktop
 
 Locate the Claude Desktop configuration file:
 
@@ -279,17 +475,74 @@ Replace `<path_to_creds.json>` with the absolute path to your `creds.json` file.
 
 > **Docker Image Tags:** Use `searchunifyutils/su-mcp` (defaults to `latest`) or pin a specific version with `searchunifyutils/su-mcp:2.0.0`. Available tags are published on [Docker Hub](https://hub.docker.com/r/searchunifyutils/su-mcp).
 
-#### Step 3 -- Restart Claude Desktop
+#### Step 3 — Restart Claude Desktop
 
 Fully quit (**Cmd+Q** on macOS) and reopen Claude Desktop to apply the updated configuration.
 
 ---
 
-### Integration 2: Local Node.js (stdio)
+### Integration 4: `/mcp-connect` — Tool-Based Login (Link in Chat)
 
-Run the MCP server directly with Node.js without Docker. Requires **Node.js 18+** (Node 20+ recommended) and a `creds.json` file.
+Use this integration when you want Claude to handle authentication entirely inside the chat — no browser auto-redirect, no headers to configure. On first use, Claude surfaces a clickable login link in the conversation. You click it, fill in the connection form in your browser, log in, and return to Claude. All tools are then available.
 
-#### Step 1 -- Clone and install
+**How it works:**
+```
+Claude Desktop → connects to /mcp-connect
+→ Claude calls login() tool automatically
+→ Chat shows: [Connect your knowledge base](https://mcp.searchunify.com/mcp-connect/login?s=...)
+→ User clicks the link → browser opens the connection form
+→ User fills in: Instance URL, Search Client UID, OAuth Client ID, OAuth Client Secret
+→ User is redirected to their login page (SSO supported)
+→ After login → "Login Successful" page in browser
+→ User returns to Claude → all tools are now available
+```
+
+#### Prerequisites
+
+- An OAuth client must be registered in your SearchUnify Admin with `https://mcp.searchunify.com/su-callback` as an allowed redirect URI (same as Integration 1, Step 1).
+
+> **Note:** If the OAuth client does not have the `/su-callback` URL registered, the login page will redirect to the SearchUnify dashboard instead of completing the connection.
+
+#### Claude Desktop Configuration
+
+Locate the Claude Desktop configuration file:
+
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "su-mcp": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.searchunify.com/mcp-connect"
+      ]
+    }
+  }
+}
+```
+
+#### Restart Claude Desktop
+
+Fully quit (**Cmd+Q** on macOS) and reopen Claude Desktop to apply the updated configuration.
+
+#### Usage
+
+On first use, Claude will automatically call the `login` tool and display the connection link. Click it, complete the form in your browser, log in, and return to Claude. All tools are then available for the duration of the session (1 hour).
+
+If the session expires, call the `login` tool again to reconnect.
+
+---
+
+### Integration 5: Local Clone (Node.js, stdio)
+
+Run the MCP server directly from source with Node.js — no Docker required. Useful for development or customization.
+
+**Requires Node.js 18+** (Node 20+ recommended).
+
+#### Step 1 — Clone and install
 
 ```bash
 git clone https://github.com/searchunify/su-mcp.git
@@ -297,11 +550,16 @@ cd su-mcp
 npm install
 ```
 
-#### Step 2 -- Create credentials file
+#### Step 2 — Create credentials file
 
-Create `src/input/creds.json` with your credentials (see Integration 1, Step 1 for format options).
+Create `src/input/creds.json` with your credentials (see Integration 3, Step 1 for format options).
 
-#### Step 3 -- Configure Claude Desktop
+#### Step 3 — Configure Claude Desktop
+
+Locate the Claude Desktop configuration file:
+
+- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -323,260 +581,9 @@ Replace `/absolute/path/to/su-mcp` with the actual path where you cloned the rep
 
 > **Note:** Setting `MCP_TRANSPORT` to `stdio` is recommended for local Claude Desktop usage. If omitted, the default is `both`, which also starts an HTTP server on port 3000.
 
-#### Step 4 -- Restart Claude Desktop
+#### Step 4 — Restart Claude Desktop
 
-Fully quit (Cmd+Q on macOS) and reopen Claude Desktop to apply the updated configuration.
-
----
-
-### Integration 3: Remote HTTP via `mcp-remote` (Header Auth)
-
-For connecting to a SearchUnify MCP server over HTTP, use [`mcp-remote`](https://www.npmjs.com/package/mcp-remote). Credentials are passed as HTTP headers on every request — no local `creds.json` is needed. To run su-mcp via mcp-remote **node version 24** is required on the machine.
-
-> **Endpoint note:** Use the root URL (`https://mcp.searchunify.com/`) — not `/mcp`. On OAuth-enabled servers the `/mcp` endpoint requires a Bearer token; the root endpoint (`/`) always accepts header-based credentials for backward compatibility.
-
-#### Claude Desktop Configuration
-
-```json
-{
-  "mcpServers": {
-    "su-mcp": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://mcp.searchunify.com/",
-        "--header",
-        "searchunify-instance:<searchunify_instance_url>",
-        "--header",
-        "searchunify-timeout:60000",
-        "--header",
-        "searchunify-auth-type:<apiKey|password|clientCredentials>",
-        "--header",
-        "searchunify-api-key:<your_api_key>",
-        "--header",
-        "searchunify-uid:<search_client_uid>"
-      ]
-    }
-  }
-}
-```
-
-#### HTTP Header Reference
-
-All header names use the `searchunify-` prefix (lowercase):
-
-| Header | Required | Description |
-|--------|----------|-------------|
-| `searchunify-instance` | Yes | Your SearchUnify instance URL (e.g. `https://your-instance.searchunify.com`). |
-| `searchunify-uid` | Yes | Search Client UID. |
-| `searchunify-auth-type` | Yes | Authentication method: `apiKey`, `password`, or `clientCredentials`. |
-| `searchunify-timeout` | No | Request timeout in milliseconds. Defaults to `60000`. |
-
-**Additional headers by auth type:**
-
-| Auth Type | Additional Headers |
-|-----------|-------------------|
-| `apiKey` | `searchunify-api-key` -- Your API key. |
-| `password` | `searchunify-oauth-username`, `searchunify-oauth-password`, `searchunify-oauth-client-id`, `searchunify-oauth-client-secret` |
-| `clientCredentials` | `searchunify-oauth-client-id`, `searchunify-oauth-client-secret` |
-
-> **Note:** When HTTP headers are present and valid, they take priority over any `creds.json` file on the server. If headers are missing or incomplete, the server falls back to `creds.json`.
-
-#### Example: API Key Authentication via `mcp-remote`
-
-```json
-{
-  "mcpServers": {
-    "su-mcp": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://mcp.searchunify.com/",
-        "--header",
-        "searchunify-instance:https://your-instance.searchunify.com",
-        "--header",
-        "searchunify-timeout:60000",
-        "--header",
-        "searchunify-auth-type:apiKey",
-        "--header",
-        "searchunify-api-key:<your_api_key>",
-        "--header",
-        "searchunify-uid:<search_client_uid>"
-      ]
-    }
-  }
-}
-```
-
-#### Example: Password Authentication via `mcp-remote`
-
-```json
-{
-  "mcpServers": {
-    "su-mcp": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://mcp.searchunify.com/",
-        "--header",
-        "searchunify-instance:https://your-instance.searchunify.com",
-        "--header",
-        "searchunify-timeout:60000",
-        "--header",
-        "searchunify-auth-type:password",
-        "--header",
-        "searchunify-oauth-username:<your_email>",
-        "--header",
-        "searchunify-oauth-password:<your_password>",
-        "--header",
-        "searchunify-oauth-client-id:<your_client_id>",
-        "--header",
-        "searchunify-oauth-client-secret:<your_client_secret>",
-        "--header",
-        "searchunify-uid:<search_client_uid>"
-      ]
-    }
-  }
-}
-```
-
-#### Example: Client Credentials Authentication via `mcp-remote`
-
-```json
-{
-  "mcpServers": {
-    "su-mcp": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://mcp.searchunify.com/",
-        "--header",
-        "searchunify-instance:https://your-instance.searchunify.com",
-        "--header",
-        "searchunify-timeout:60000",
-        "--header",
-        "searchunify-auth-type:clientCredentials",
-        "--header",
-        "searchunify-oauth-client-id:<your_client_id>",
-        "--header",
-        "searchunify-oauth-client-secret:<your_client_secret>",
-        "--header",
-        "searchunify-uid:<search_client_uid>"
-      ]
-    }
-  }
-}
-```
-
----
-
-### Integration 4: Claude Public Directory (OAuth)
-
-When installed from Claude's public directory, authentication is handled via OAuth 2.0 using a **proxy flow** — the MCP server delegates login to your SearchUnify instance. No API keys or passwords are stored in Claude.
-
-**OAuth proxy flow:**
-```
-Claude → MCP /authorize (form) → SU /auth/authorise_redirect (SU login) → MCP /su-callback → Bearer token
-```
-
----
-
-#### Step 1 — Register an OAuth Client in SearchUnify Admin
-
-Before connecting, an OAuth client must be registered in your SearchUnify instance with the MCP server's callback URL as the `redirect_uri`.
-
-1. Log in to your SearchUnify Admin panel
-2. Navigate to **OAuth Clients** (usually under Settings or Developer)
-3. Create a new OAuth client with:
-   - **Name:** e.g. `Claude MCP Connector`
-   - **Redirect URI:** `<MCP_ISSUER_URL>/su-callback`  
-     e.g. `https://mcp.searchunify.com/su-callback`
-   - **Grant Types:** `authorization_code`
-   - **Scope:** `All` (or the scopes required for search and analytics)
-4. Note the generated **Client ID** and **Client Secret** — users will need these when connecting
-
----
-
-#### Step 2 — Configure the MCP Server (server operators)
-
-Set these environment variables before starting the MCP server:
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `OAUTH_ENCRYPTION_KEY` | Yes | 64-character hex string for AES-256 encryption of stored tokens |
-| `MCP_ISSUER_URL` | Yes | Public HTTPS URL of your MCP server (e.g., `https://mcp.searchunify.com`) |
-| `REDIS_URL` | No | Redis connection URL (e.g., `redis://localhost:6379`). Omit to use in-memory store (tokens lost on server restart). |
-
-Generate an encryption key:
-```bash
-openssl rand -hex 32
-```
-
-> **Security:** Never commit `OAUTH_ENCRYPTION_KEY` or `REDIS_URL` to version control. Use environment variables, Docker secrets, or a secrets manager.
-
----
-
-#### Step 3 — Connect from Claude
-
-When a user connects via Claude's directory:
-
-1. Claude opens the SearchUnify connection form
-2. The user enters:
-   - **SearchUnify Instance URL** — e.g. `https://your-instance.searchunify.com`
-   - **Search Client UID** — found in SearchUnify Admin → Search Clients
-   - **OAuth Client ID** — from the client registered in Step 1
-   - **OAuth Client Secret** — from the client registered in Step 1
-3. The user is redirected to their SearchUnify login page
-4. After login, an MCP Bearer token is issued and all tools are available in Claude
-
----
-
-### Integration 5: Tool-Based Login via `/mcp-connect`
-
-Use this integration when the standard OAuth flow (Integration 4) does not work — for example when Claude Desktop fails to auto-complete the browser redirect, or when you prefer to initiate login manually from within the chat.
-
-A browser **is required** — the difference from Integration 4 is that the browser is opened **manually** by clicking a link surfaced in the chat, rather than being opened automatically by mcp-remote.
-
-**How it works:**
-```
-Claude Desktop → connects to /mcp-connect
-→ Claude calls login() tool automatically
-→ Chat shows: [Connect SearchUnify](https://mcp.searchunify.com/mcp-connect/login?s=...)
-→ User clicks the link → browser opens the connection form
-→ User fills in: Instance URL, Search Client UID, OAuth Client ID, OAuth Client Secret
-→ User is redirected to their SearchUnify login page (SSO supported)
-→ After login → "Login Successful" page in browser
-→ User returns to Claude → all tools are now available
-```
-
-#### Prerequisites
-
-- The MCP server must have `OAUTH_ENCRYPTION_KEY` and `MCP_ISSUER_URL` set (same as Integration 4).
-- An OAuth client must be registered in your SearchUnify Admin with `<MCP_ISSUER_URL>/su-callback` as an allowed redirect URI (e.g. `https://mcp.searchunify.com/su-callback`).
-
-> **Note:** If the SU OAuth client does not have the MCP server's `/su-callback` URL registered, SU will redirect to its own dashboard after login instead of completing the connection. Always register the exact callback URL for each environment (including localhost for local testing).
-
-#### Claude Desktop Configuration
-
-```json
-{
-  "mcpServers": {
-    "su-mcp": {
-      "command": "npx",
-      "args": [
-        "mcp-remote",
-        "https://mcp.searchunify.com/mcp-connect"
-      ]
-    }
-  }
-}
-```
-
-#### Usage
-
-On first use, Claude will automatically call the `login` tool and display the connection link. Click it, complete the form in your browser, log in, and return to Claude. All tools are then available for the duration of the session (1 hour).
-
-If the session expires, call the `login` tool again to reconnect.
+Fully quit (**Cmd+Q** on macOS) and reopen Claude Desktop to apply the updated configuration.
 
 ---
 
