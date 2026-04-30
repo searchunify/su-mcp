@@ -210,6 +210,9 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
     next();
   });
 
+  // Rate-limit /mcp before the OAuth auth middleware runs so unauthenticated floods don't bypass it
+  app.use("/mcp", mcpRateLimit);
+
   // Mount the SDK's OAuth auth router (handles /authorize, /token, /register, /.well-known/*)
   // Uses basePath so endpoints are accessible behind a reverse proxy (e.g., /7777/authorize)
   app.use(basePath, mcpAuthRouter({
