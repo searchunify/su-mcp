@@ -58,11 +58,13 @@ No parameters required.
 **Returns:** A markdown link to the connection form, e.g.:
 
 ```
-Click the link below to connect your SearchUnify instance:
+Please present this login link to the user so they can connect their SearchUnify instance:
 
 [Connect SearchUnify](https://mcp.searchunify.com/mcp-connect/login?s=<session_id>)
 
-After completing login in your browser, let me know and I will continue with your request.
+If your client supports clickable links, render the markdown above. Otherwise show the plain URL so the user can copy it: https://mcp.searchunify.com/mcp-connect/login?s=<session_id>
+
+After the user completes login in their browser, let them know you are ready to continue.
 ```
 
 ---
@@ -141,7 +143,7 @@ Lists all search clients configured in the SearchUnify instance. Returns minimal
 
 ## Authentication Methods
 
-The server supports three authentication methods:
+The server supports four authentication methods:
 
 ### 1. API Key
 
@@ -154,6 +156,10 @@ Requires username, password, client ID, and client secret. Best for user-specifi
 ### 3. OAuth 2.0 Client Credentials Grant
 
 Requires client ID and client secret only. Best for service-to-service access without a specific user context.
+
+### 4. OAuth 2.0 Proxy (Browser-based login)
+
+Used by Integrations 1 and 4. No API key or password is stored in the MCP server — the server delegates authentication to your SearchUnify login page via an OAuth proxy flow. Users authenticate once in the browser and receive a short-lived Bearer token.
 
 ---
 
@@ -223,18 +229,30 @@ Before connecting, an OAuth client must be registered in your SearchUnify instan
 
 ---
 
-#### Step 2 — Connect from Claude
+#### Step 2 — Add the connector in Claude
 
-When a user connects via Claude's directory:
+**Via Claude.ai (web)**
 
-1. Claude opens the SearchUnify connection form in the browser
-2. The user enters:
-   - **SearchUnify Instance URL** — e.g. `https://your-instance.searchunify.com`
-   - **Search Client UID** — found in SearchUnify Admin → Search Clients
-   - **OAuth Client ID** — from the client registered in Step 1
-   - **OAuth Client Secret** — from the client registered in Step 1
-3. The user is redirected to their SearchUnify login page
-4. After login, an MCP Bearer token is issued and all tools are available in Claude
+1. Open [claude.ai](https://claude.ai) in your browser
+2. Click your profile icon → **Settings**
+3. Click **Connectors** in the left sidebar
+4. Click **+ Add custom connector**
+5. Enter the MCP server URL: `https://mcp.searchunify.com`
+6. Click **Add** — a browser window opens with the SearchUnify connection form
+
+**Via Claude Desktop**
+
+Claude Desktop does not have a native UI for adding remote HTTP MCP servers. Use [Integration 2](#integration-2-mcp-remote--remote-http-with-header-auth) (mcp-remote via config file) or [Integration 4](#integration-4-mcp-connect--tool-based-login-link-in-chat) (mcp-connect) instead.
+
+#### Step 3 — Complete the connection form
+
+Once the connection form opens in your browser:
+
+1. Enter your **SearchUnify Instance URL** — e.g. `https://your-instance.searchunify.com`
+2. Enter your **Search Client UID** — found in SearchUnify Admin → Search Clients
+3. Enter the **OAuth Client ID** and **OAuth Client Secret** from Step 1
+4. Submit the form — you will be redirected to your SearchUnify login page
+5. After login, an MCP Bearer token is issued and all tools become available in Claude
 
 ---
 
@@ -716,6 +734,9 @@ su-mcp/
 | **Missing API Scopes** | Ensure the client and user have the required search and analytics scopes enabled in your SearchUnify instance. |
 | **Connection Refused (HTTP)** | Verify the server is running with `MCP_TRANSPORT=http` and the port matches. |
 | **mcp-remote not found** | Run `npx mcp-remote` (it will be fetched automatically) or install it globally with `npm install -g mcp-remote`. |
+| **Rate limited (HTTP 429)** | Too many requests from your IP. Wait 15 minutes for the window to reset, then retry. |
+| **Session expired (`/mcp-connect`)** | The 1-hour session has elapsed. Ask Claude to call the `login` tool again to get a new connection link. |
+| **OAuth login redirects to dashboard instead of completing** | The `/su-callback` URL is not registered as a redirect URI in your SearchUnify OAuth client. Add `https://mcp.searchunify.com/su-callback` (or your server's URL) to the allowed redirect URIs in SearchUnify Admin. |
 
 ---
 
@@ -728,7 +749,7 @@ su-mcp/
 - Dynamic client registration and auto-re-registration on unknown clients
 - Refresh token rotation with 24-day TTL
 - Rate limiting on auth and MCP endpoints
-- Security hardening: CSP headers, HSTS, PKCE validation, bearer token verification
+- Security hardening: HSTS, PKCE validation, bearer token verification, security response headers
 - OAuth configuration form with inline validation, SearchUnify branding, and setup docs link
 - Tool call logging with caller IP, endpoint, SU instance URL, and OAuth client ID
 - Multi-platform Docker image (`linux/amd64`, `linux/arm64`)
@@ -739,7 +760,7 @@ su-mcp/
 - Added `login` MCP tool (only on `/mcp-connect`): returns a link to the connection form in chat; user opens it manually, logs in via SU (SSO supported), and receives a "Login Successful" page
 - SU tokens stored by MCP session ID after tool-based login; all other tools work normally post-auth
 - Sessions persist for 1 hour; expired sessions prompt the user to call `login` again
-- Existing OAuth flow (`/6565/mcp`, `/7777/mcp`) and all other integrations are unchanged
+- Existing OAuth flow and all other integrations are unchanged
 
 ### v1.2.0
 - Added OAuth 2.0 proxy flow for Claude public directory listing (PKCE, Dynamic Client Registration)
@@ -760,7 +781,7 @@ su-mcp/
 - Added `sessionDetails` and `sessionListTable` report types to analytics tool
 - Added `tileDataContent`, `tileDataMetrics1`, `tileDataMetrics2` tile report types
 - Added `sessionId`, `pageNumber`, `startIndex`, `sortByField`, `sortType` parameters to analytics tool
-- Added local Node.js integration guide (Integration 2)
+- Added local Node.js integration guide (Integration 5)
 - Updated `su-sdk` dependency to `2.1.0`
 - Improved `formatForClaude` to handle object and nested data responses
 
