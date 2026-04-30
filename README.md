@@ -143,23 +143,21 @@ Lists all search clients configured in the SearchUnify instance. Returns minimal
 
 ## Authentication Methods
 
-The server supports four authentication methods:
+The server supports two ways to authenticate, depending on the integration type:
 
-### 1. API Key
+### Direct credential auth (Integrations 2, 3, 5)
 
-The simplest method. Requires an API key generated from your SearchUnify instance.
+Credentials are supplied via HTTP headers or `creds.json`. Three credential types are supported:
 
-### 2. OAuth 2.0 Password Grant
+| Method | Required fields | Best for |
+|--------|----------------|----------|
+| **API Key** | `apiKey` | Simplest setup; single API key from your SearchUnify instance |
+| **OAuth 2.0 Password Grant** | username, password, client ID, client secret | User-specific access |
+| **OAuth 2.0 Client Credentials** | client ID, client secret | Service-to-service access with no user context |
 
-Requires username, password, client ID, and client secret. Best for user-specific access.
+### Browser-based OAuth proxy (Integrations 1, 4)
 
-### 3. OAuth 2.0 Client Credentials Grant
-
-Requires client ID and client secret only. Best for service-to-service access without a specific user context.
-
-### 4. OAuth 2.0 Proxy (Browser-based login)
-
-Used by Integrations 1 and 4. No API key or password is stored in the MCP server — the server delegates authentication to your SearchUnify login page via an OAuth proxy flow. Users authenticate once in the browser and receive a short-lived Bearer token.
+No credentials are stored in the MCP server or Claude. The server acts as an OAuth 2.0 proxy — it opens a connection form in the user's browser, collects the SearchUnify instance details and OAuth client credentials, then delegates the actual login to the SearchUnify login page. After successful login, a short-lived Bearer token is issued to Claude for the duration of the session.
 
 ---
 
