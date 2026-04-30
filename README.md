@@ -229,13 +229,19 @@ Before connecting, an OAuth client must be registered in your SearchUnify instan
 
 #### Step 2 — Add the connector in Claude
 
+> **MCP server URL**
+> ```
+> https://mcp.searchunify.com/mcp
+> ```
+> Use this exact URL when adding the connector. The `/mcp` path is the OAuth-protected endpoint — entering just the base domain will not trigger the login flow.
+
 **Via Claude.ai (web)**
 
 1. Open [claude.ai](https://claude.ai) in your browser
 2. Click your profile icon → **Settings**
 3. Click **Connectors** in the left sidebar
 4. Click **+ Add custom connector**
-5. Enter the MCP server URL: `https://mcp.searchunify.com`
+5. Enter the MCP server URL: `https://mcp.searchunify.com/mcp`
 6. Click **Add** — a browser window opens with the SearchUnify connection form
 
 **Via Claude Desktop**
