@@ -14,10 +14,10 @@ describe('Analytics tool - reportTypes', () => {
     getAllSearchConversion: "getAllSearchConversion",
     averageClickPosition: "averageClickPosition",
     sessionDetails: "sessionDetails",
-    sessionListTable: "sessionListTable",
+    sessionList: "sessionList",
     tileDataContent: "tileDataContent",
-    tileDataMetrics1: "tileDataMetrics1",
-    tileDataMetrics2: "tileDataMetrics2",
+    overviewSessionCount: "overviewSessionCount",
+    overviewTileDataCount: "overviewTileDataCount",
     traffic: "traffic",
     search_no_click_pct: "search_no_click_pct",
     relevance_rate: "relevance_rate",
@@ -35,9 +35,9 @@ describe('Analytics tool - reportTypes', () => {
     assert.equal(reportTypes.sessionDetails, 'sessionDetails');
   });
 
-  it('should include sessionListTable report type', () => {
-    assert.ok(reportTypes.sessionListTable);
-    assert.equal(reportTypes.sessionListTable, 'sessionListTable');
+  it('should include sessionList report type', () => {
+    assert.ok(reportTypes.sessionList);
+    assert.equal(reportTypes.sessionList, 'sessionList');
   });
 
   it('should have 16 report types total', () => {
@@ -48,10 +48,10 @@ describe('Analytics tool - reportTypes', () => {
     const schema = z.enum(Object.values(reportTypes));
     assert.equal(schema.parse('averageClickPosition'), 'averageClickPosition');
     assert.equal(schema.parse('sessionDetails'), 'sessionDetails');
-    assert.equal(schema.parse('sessionListTable'), 'sessionListTable');
+    assert.equal(schema.parse('sessionList'), 'sessionList');
     assert.equal(schema.parse('tileDataContent'), 'tileDataContent');
-    assert.equal(schema.parse('tileDataMetrics1'), 'tileDataMetrics1');
-    assert.equal(schema.parse('tileDataMetrics2'), 'tileDataMetrics2');
+    assert.equal(schema.parse('overviewSessionCount'), 'overviewSessionCount');
+    assert.equal(schema.parse('overviewTileDataCount'), 'overviewTileDataCount');
     assert.equal(schema.parse('traffic'), 'traffic');
     assert.equal(schema.parse('self_solve_rate'), 'self_solve_rate');
   });
@@ -96,15 +96,15 @@ describe('Analytics tool - schema', () => {
     assert.equal(result.sessionId, '1649742483444046');
   });
 
-  it('should accept sessionListTable report type with sessionId', () => {
+  it('should accept sessionList report type with sessionId', () => {
     const result = analyticsSchema.parse({
-      reportType: 'sessionListTable',
+      reportType: 'sessionList',
       startDate: '2025-01-01',
       endDate: '2025-01-31',
       count: 50,
       sessionId: '1649742483444046',
     });
-    assert.equal(result.reportType, 'sessionListTable');
+    assert.equal(result.reportType, 'sessionList');
   });
 
   it('should reject count greater than 500', () => {

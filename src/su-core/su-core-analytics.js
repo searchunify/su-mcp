@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { formatForClaude } from "./../utils.js";
+import { analyticsToolAnnotations } from "../tool-annotations-meta.js";
 import {
   RECIPES,
   executiveOptionsForAnalyticsTool,
@@ -49,7 +50,8 @@ const baseReportTypes = {
   getAllSearchConversion: "getAllSearchConversion",
   averageClickPosition: "averageClickPosition",
   sessionDetails: "sessionDetails",
-  sessionListTable: "sessionListTable",
+  /** Session list grid (same wire as SDK `getSessionListTable`; MCP `reportType` name is shorter). */
+  sessionList: "sessionList",
   /** GET /api/v2/getSessionTrackingFormattedResult — Session Tracking formatted (admin). */
   sessionTrackingFormattedResult: "sessionTrackingFormattedResult",
   /** POST /api/v2/conversion/clicksCountContentSource — Search filter based clicks. */
@@ -114,10 +116,18 @@ const baseReportTypes = {
   contentArticleUsageByAgents: "contentArticleUsageByAgents",
   /** POST /api/v2/content/successiveArticlesUsage — Articles Usage By Agents drill-down rows. */
   contentSuccessiveArticlesUsage: "contentSuccessiveArticlesUsage",
-  /** POST /api/v2/overview/tileDataMetrics1 — data.visitors is session count; searchUsers, uniqueUsersByDevice, email metrics */
-  tileDataMetrics1: "tileDataMetrics1",
-  /** POST /api/v2/overview/tileDataMetrics2 — searches, clicks, cases, withResult/withoutResult, uniqueSearches */
-  tileDataMetrics2: "tileDataMetrics2",
+  /**
+   * **Overview — session & user strip** (admin Overview first KPI row; not a single “count” field only).
+   * Returns visitors (also copied to `sessionCount` in MCP), `searchUsers`, `uniqueUsersByDevice`, `uniqueUsersByEmail`, etc.
+   * HTTP: `POST /api/v2/overview/tileDataMetrics1` (internal; use this `reportType` in MCP, not the path name).
+   */
+  overviewSessionCount: "overviewSessionCount",
+  /**
+   * **Overview — search & case activity strip** (admin Overview second KPI row; searches, clicks, cases, with/without result, unique searches).
+   * Name is “tile”-oriented to match the UI card group; payload is search/click/case volumes, not a generic “tile list”.
+   * HTTP: `POST /api/v2/overview/tileDataMetrics2` (internal; use this `reportType` in MCP).
+   */
+  overviewTileDataCount: "overviewTileDataCount",
   /** POST /api/v2/overview/topSearches — Search Report *all searches* / *top searches* keyword grid (not Conversions *Top Clicked Searches*). */
   overviewTopSearches: "overviewTopSearches",
   /** POST /api/v2/overview/searchSessions — Search Report *successful searches* (sessions with results). */
@@ -203,6 +213,13 @@ for (const id of OVERVIEW_AND_LLM_FEEDBACK_REPORT_TYPES) {
   }
 }
 
+/** Search client UUID: optional MCP **uid**, else creds `config.uid`. Conversion bodies with **ecoSystemId** set `uid` to null on the wire (ecosystem scope). */
+function resolvedSearchClientUid(args, credsForRequest) {
+  const raw = args.uid;
+  if (raw != null && String(raw).trim() !== "") return String(raw).trim();
+  return credsForRequest.config.uid;
+}
+
 /** Core POST /api/v2/conversion/* body: from/to, internalUser, uid or ecoId. MCP does not add `tenantId`; admin/BFF adds it when proxying to analytics. */
 function conversionPostBase(args, credsForRequest) {
   const internalUser = args.internalUser ?? "all";
@@ -215,7 +232,7 @@ function conversionPostBase(args, credsForRequest) {
     body.ecoId = args.ecoSystemId;
     body.uid = null;
   } else {
-    body.uid = credsForRequest.config.uid;
+    body.uid = resolvedSearchClientUid(args, credsForRequest);
     body.ecoId = null;
   }
   if (args.userMetricsFlag !== undefined) body.userMetricsFlag = args.userMetricsFlag;
@@ -248,7 +265,7 @@ function leadershipUidEcoBody(args, credsForRequest) {
   if (args.ecoSystemId) {
     return { ...base, ecoId: args.ecoSystemId };
   }
-  return { ...base, uid: credsForRequest.config.uid };
+  return { ...base, uid: resolvedSearchClientUid(args, credsForRequest) };
 }
 
 function leadershipUsdRound2(n) {
@@ -325,7 +342,7 @@ function scopeParamsForSimilarValidationOverview(args, credsForRequest) {
   if (ecoSystemId) {
     return { ...base, ecoSystemId };
   }
-  return { ...base, searchClientId: credsForRequest.config.uid };
+  return { ...base, searchClientId: resolvedSearchClientUid(args, credsForRequest) };
 }
 
 /** Scope for paginated / count-aware overview mirrors: dates, `count`, `internalUser`, uid or eco.
@@ -341,7 +358,7 @@ function scopeParamsForOverview(args, credsForRequest) {
   if (ecoSystemId) {
     return { ...base, ecoSystemId };
   }
-  return { ...base, searchClientId: credsForRequest.config.uid };
+  return { ...base, searchClientId: resolvedSearchClientUid(args, credsForRequest) };
 }
 
 /** Params for `getLlmResponseFeedback` only (`llmResponseFeedbackOverview` Joi — no `ecoSystemId` in SDK yet). */
@@ -350,7 +367,7 @@ function paramsForLlmResponseFeedback(args, credsForRequest) {
   return {
     startDate,
     endDate,
-    searchClientId: credsForRequest.config.uid,
+    searchClientId: resolvedSearchClientUid(args, credsForRequest),
     count: count ?? 10,
     pageNumber: pageNumber ?? 1,
     internalUser: internalUser ?? "all",
@@ -370,9 +387,12 @@ const contentGapReportRoutingHint =
 const leadershipReportRoutingHint =
   "**Leadership dashboard (admin):** rollup data is **quarterly**; without explicit dates the analytics service defaults to the **last six completed quarters**. **Always** ask the user which quarter or date range they care about, and say the series may span up to six quarters. **leadershipUseBackendLastSixQuarters** `true` → omit `from`/`to` on the API (and you may **omit startDate/endDate** on the MCP tool—validation allows it for leadership USSV/ASSV/assisted-case/deflection reportTypes); otherwise **startDate**/**endDate** are **required** and map to `from`/`to`. **leadershipGetContentSources** does not use a date window—**startDate**/**endDate** may be omitted. **Unassisted Self Solve Volume** (implicit deflection volume, self-solve rate, etc.) → **leadershipUnassistedSelfSolveVolume**; set **directlyViewSetting** `true` only when the org uses “All sessions” direct-view semantics (mirrors admin). **Assisted Self Solve Volume** (explicit deflection / KM metrics) → **leadershipAssistedSelfSolveVolume**. **Assisted Case Volume** → **leadershipAssistedCaseVolume**; optional **leadershipContentSourceIndexName** = `elasticIndexName` from **leadershipGetContentSources**. **Cost savings (USD)** from deflection counts → **leadershipCostSavingsDeflectionUsd** (ask for **leadershipCostPerCaseUsd**; if the user does not give a value use **200**). Raw counts only → **leadershipDeflectionCount**. (CSV/email export for cost savings is **not** exposed via MCP—use the analytics UI.) Analytics exposes **`/leadership/*`** (requires **`analytics-secret`**) and **`/api/v2/leadership/*`** (same auth as other **`/api/v2/*`** mirrors). Admin browser traffic stays on **`/analytics/leadership/*`**; MCP/SDK use **`/api/v2/leadership/*`**.";
 
+const overviewDashboardMetricsHint =
+  "**Overview dashboard KPI strips (`reportType`):** **overviewSessionCount** — visitors/sessions, search users, unique users (device/email). **overviewTileDataCount** — searches, clicks, cases, with/without result, unique searches. Prefer **overviewTileDataCount** for search/click/case volumes; use **overviewSessionCount** for audience/session context. (Do not use raw path names `tileDataMetrics1` / `tileDataMetrics2` in MCP — they are not valid `reportType` values.)";
+
 const reportTypeZodDescription = ENABLE_EXECUTIVE_RECIPE_REPORTS
-  ? `Report id: raw API types (tileData*, search*, session*…) or the same \`recipeId\` values as \`executive_business_query\` (all Phase 1–3 orchestrations: traffic … su_gpt_attribution_deferred). ${conversionsReportRoutingHint} ${contentGapReportRoutingHint} ${leadershipReportRoutingHint}`
-  : `Report id: raw SearchUnify analytics APIs only (tileData*, search*, session*…). Executive recipe IDs are not available on this tool; use \`executive_business_query\` for those orchestrations. ${conversionsReportRoutingHint} ${contentGapReportRoutingHint} ${leadershipReportRoutingHint}`;
+  ? `Report id: raw API types (tileData*, search*, session*…) or the same \`recipeId\` values as \`executive_business_query\` (all Phase 1–3 orchestrations: traffic … su_gpt_attribution_deferred). ${overviewDashboardMetricsHint} ${conversionsReportRoutingHint} ${contentGapReportRoutingHint} ${leadershipReportRoutingHint}`
+  : `Report id: raw SearchUnify analytics APIs only (tileData*, search*, session*…). Executive recipe IDs are not available on this tool; use \`executive_business_query\` for those orchestrations. ${overviewDashboardMetricsHint} ${conversionsReportRoutingHint} ${contentGapReportRoutingHint} ${leadershipReportRoutingHint}`;
 
 const baseAnalyticsFieldShape = {
   reportType: z
@@ -395,12 +415,12 @@ const baseAnalyticsFieldShape = {
     .min(1)
     .max(500)
     .describe(
-      "Row/page count (required on this tool for uniformity). Maps to `classificationCount` in executive recipes, LLM `limit`, **overviewPageRating** API `limit`, etc. Ignored on the wire for **overviewFeaturedSnippet** / **overviewKnowledgeTitle** (fixed backend limits)."
+      "Row/page count (required on this tool for uniformity). Maps to `classificationCount` in executive recipes, LLM `limit`, **overviewPageRating** API `limit`, etc. Ignored on the wire for **overviewSessionCount** / **overviewTileDataCount** (no row pagination) and for **overviewFeaturedSnippet** / **overviewKnowledgeTitle** (fixed backend limits)."
     ),
   sessionId: z
     .string()
     .optional()
-    .describe("Session cookie for sessionDetails / sessionListTable."),
+    .describe("Session cookie for sessionDetails / sessionList."),
   pageNumber: z
     .number()
     .min(1)
@@ -430,6 +450,13 @@ const baseAnalyticsFieldShape = {
     .uuid()
     .optional()
     .describe("When set, scope requests with ecoId instead of uid (mutually exclusive with creds uid on the wire)."),
+  uid: z
+    .string()
+    .uuid()
+    .optional()
+    .describe(
+      "Optional search client UUID for `searchClientId` / conversion body `uid`. **Omit** to use the uid from MCP auth (same as today). When **ecoSystemId** is set, conversion POST bodies send `ecoId` and null `uid`; overview/content routes that accept **ecoSystemId** use ecosystem scope and ignore this field for `searchClientId`."
+    ),
   directlyViewSetting: z
     .boolean()
     .optional()
@@ -598,8 +625,8 @@ const analyticsInputSchemaBase = ENABLE_EXECUTIVE_RECIPE_REPORTS
   : z.object(baseAnalyticsFieldShape);
 
 const analyticsToolDescription = ENABLE_EXECUTIVE_RECIPE_REPORTS
-  ? "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, overviewTopSearches, overviewSearchSessions, search classification, sessions (`sessionDetails`, `sessionListTable`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, `conversionCaseDeflectionStage1`, `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Content Gap tab** (`contentSplitTileDataContent`, `contentUnsuccessfulSummaryChart`, `contentSearchesWithNoClicks`, `contentSuccessiveNoClicks`, `contentSearchesWithNoResult`, `contentSuccessiveNoResults`, `contentUnsuccessfulSearchSessionChart`, `contentHighConversion`, `contentHighConversionClicks`, `contentHighConversionSessions`, `contentArticleUsageByAgents`, `contentSuccessiveArticlesUsage`) with content-gap helper fields (`contentGap*`). **Disambiguation:** *User gave a search phrase and wants documents clicked in Top Clicked Searches* → **conversionClickedResults** + **clickedResultsSearchQuery**. *User gave a doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *User gave an article URL from **Articles failed / deflected** grids* → **conversionSearchesCreatedCase** or **conversionSearchesOnDeflection** or **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Per-document “what searches led to clicks on this doc?”** → **conversionSearchesOnClick** + **clickedDocumentUrl**. **Per-search “what documents were clicked for this query?”** → **conversionClickedResults** + **clickedResultsSearchQuery**. **Case deflection drill-downs:** **caseDeflectionArticleUrl** + **conversionSearchTypeArticle**; sessions add **caseDeflectionSessionsSuccessfulDeflection**. **Not** **conversionSessionTrackingDetails** for these. **Overview tab** (overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **Leadership dashboard** (HTTP `POST /api/v2/leadership/*`): `leadershipGetContentSources`, `leadershipUnassistedSelfSolveVolume`, `leadershipAssistedSelfSolveVolume`, `leadershipAssistedCaseVolume`, `leadershipDeflectionCount`, `leadershipCostSavingsDeflectionUsd` — see `reportType` hint; **leadershipUseBackendLastSixQuarters** for admin default window; **leadershipCostPerCaseUsd** defaults to **200** when the user does not specify cost per case. **Executive orchestrations (same as `executive_business_query`):** all `reportType` values in Phase 1 (traffic, search_no_click_pct, … self_solve_rate), Phase 2 (roi_case_deflection, savings_from_conversion, cases_without_self_service, direct_views_case_creation, stage2_deflection), Phase 3 (article_deflection_contrast, attach_article_case_journey, community_content_ctr, top_article_driven_cases_month, su_gpt_attribution_deferred) — use startDate/endDate. Extra executive fields (e.g. costPerCase, communityNameHints) match the executive tool. Search client uid comes from auth (optional ecoSystemId). MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it."
-  : "Analytics from SearchUnify. Raw APIs: tileDataContent, tileDataMetrics1, tileDataMetrics2, overviewTopSearches, overviewSearchSessions, search classification, sessions (`sessionDetails`, `sessionListTable`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, `conversionCaseDeflectionStage1`, `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Content Gap tab** (`contentSplitTileDataContent`, `contentUnsuccessfulSummaryChart`, `contentSearchesWithNoClicks`, `contentSuccessiveNoClicks`, `contentSearchesWithNoResult`, `contentSuccessiveNoResults`, `contentUnsuccessfulSearchSessionChart`, `contentHighConversion`, `contentHighConversionClicks`, `contentHighConversionSessions`, `contentArticleUsageByAgents`, `contentSuccessiveArticlesUsage`) with `contentGap*` helper fields. **Disambiguation:** *Search phrase → documents clicked (Top Clicked Searches)* → **conversionClickedResults** + **clickedResultsSearchQuery**. *Doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *Article URL from **Articles failed / deflected*** → **conversionSearchesCreatedCase** / **conversionSearchesOnDeflection** / **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Per-document “what searches led to clicks on this doc?”** → **conversionSearchesOnClick** + **clickedDocumentUrl**. **Per-search “what documents were clicked for this query?”** → **conversionClickedResults** + **clickedResultsSearchQuery**. **Case deflection:** **caseDeflectionArticleUrl** + **conversionSearchTypeArticle**; sessions: **caseDeflectionSessionsSuccessfulDeflection**. **Not** **conversionSessionTrackingDetails** for these. **Overview tab** (overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **Leadership dashboard** (HTTP `POST /api/v2/leadership/*`): `leadershipGetContentSources`, `leadershipUnassistedSelfSolveVolume`, `leadershipAssistedSelfSolveVolume`, `leadershipAssistedCaseVolume`, `leadershipDeflectionCount`, `leadershipCostSavingsDeflectionUsd` — see `reportType` hint; **leadershipUseBackendLastSixQuarters** for admin default window; **leadershipCostPerCaseUsd** defaults to **200** when the user does not specify cost per case. Executive recipe orchestrations are not available as `reportType` here; use the `executive_business_query` tool for those. Search client uid comes from auth (optional ecoSystemId). MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it.";
+  ? "Analytics from SearchUnify. Raw APIs: tileDataContent, overviewSessionCount, overviewTileDataCount, overviewTopSearches, overviewSearchSessions, search classification, sessions (`sessionDetails`, `sessionList`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, `conversionCaseDeflectionStage1`, `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Content Gap tab** (`contentSplitTileDataContent`, `contentUnsuccessfulSummaryChart`, `contentSearchesWithNoClicks`, `contentSuccessiveNoClicks`, `contentSearchesWithNoResult`, `contentSuccessiveNoResults`, `contentUnsuccessfulSearchSessionChart`, `contentHighConversion`, `contentHighConversionClicks`, `contentHighConversionSessions`, `contentArticleUsageByAgents`, `contentSuccessiveArticlesUsage`) with content-gap helper fields (`contentGap*`). **Disambiguation:** *User gave a search phrase and wants documents clicked in Top Clicked Searches* → **conversionClickedResults** + **clickedResultsSearchQuery**. *User gave a doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *User gave an article URL from **Articles failed / deflected** grids* → **conversionSearchesCreatedCase** or **conversionSearchesOnDeflection** or **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Per-document “what searches led to clicks on this doc?”** → **conversionSearchesOnClick** + **clickedDocumentUrl**. **Per-search “what documents were clicked for this query?”** → **conversionClickedResults** + **clickedResultsSearchQuery**. **Case deflection drill-downs:** **caseDeflectionArticleUrl** + **conversionSearchTypeArticle**; sessions add **caseDeflectionSessionsSuccessfulDeflection**. **Not** **conversionSessionTrackingDetails** for these. **Overview tab** (overviewSessionCount, overviewTileDataCount, overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **Leadership dashboard** (HTTP `POST /api/v2/leadership/*`): `leadershipGetContentSources`, `leadershipUnassistedSelfSolveVolume`, `leadershipAssistedSelfSolveVolume`, `leadershipAssistedCaseVolume`, `leadershipDeflectionCount`, `leadershipCostSavingsDeflectionUsd` — see `reportType` hint; **leadershipUseBackendLastSixQuarters** for admin default window; **leadershipCostPerCaseUsd** defaults to **200** when the user does not specify cost per case. **Executive orchestrations (same as `executive_business_query`):** all `reportType` values in Phase 1 (traffic, search_no_click_pct, … self_solve_rate), Phase 2 (roi_case_deflection, savings_from_conversion, cases_without_self_service, direct_views_case_creation, stage2_deflection), Phase 3 (article_deflection_contrast, attach_article_case_journey, community_content_ctr, top_article_driven_cases_month, su_gpt_attribution_deferred) — use startDate/endDate. Extra executive fields (e.g. costPerCase, communityNameHints) match the executive tool. Optional **uid** (UUID) overrides the search client id from MCP auth for `searchClientId` / conversion `uid`; omit **uid** for creds default. **ecoSystemId** still selects ecosystem scope where supported. MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it."
+  : "Analytics from SearchUnify. Raw APIs: tileDataContent, overviewSessionCount, overviewTileDataCount, overviewTopSearches, overviewSearchSessions, search classification, sessions (`sessionDetails`, `sessionList`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, `conversionCaseDeflectionStage1`, `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Content Gap tab** (`contentSplitTileDataContent`, `contentUnsuccessfulSummaryChart`, `contentSearchesWithNoClicks`, `contentSuccessiveNoClicks`, `contentSearchesWithNoResult`, `contentSuccessiveNoResults`, `contentUnsuccessfulSearchSessionChart`, `contentHighConversion`, `contentHighConversionClicks`, `contentHighConversionSessions`, `contentArticleUsageByAgents`, `contentSuccessiveArticlesUsage`) with `contentGap*` helper fields. **Disambiguation:** *Search phrase → documents clicked (Top Clicked Searches)* → **conversionClickedResults** + **clickedResultsSearchQuery**. *Doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *Article URL from **Articles failed / deflected*** → **conversionSearchesCreatedCase** / **conversionSearchesOnDeflection** / **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Per-document “what searches led to clicks on this doc?”** → **conversionSearchesOnClick** + **clickedDocumentUrl**. **Per-search “what documents were clicked for this query?”** → **conversionClickedResults** + **clickedResultsSearchQuery**. **Case deflection:** **caseDeflectionArticleUrl** + **conversionSearchTypeArticle**; sessions: **caseDeflectionSessionsSuccessfulDeflection**. **Not** **conversionSessionTrackingDetails** for these. **Overview tab** (overviewSessionCount, overviewTileDataCount, overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **Leadership dashboard** (HTTP `POST /api/v2/leadership/*`): `leadershipGetContentSources`, `leadershipUnassistedSelfSolveVolume`, `leadershipAssistedSelfSolveVolume`, `leadershipAssistedCaseVolume`, `leadershipDeflectionCount`, `leadershipCostSavingsDeflectionUsd` — see `reportType` hint; **leadershipUseBackendLastSixQuarters** for admin default window; **leadershipCostPerCaseUsd** defaults to **200** when the user does not specify cost per case. Executive recipe orchestrations are not available as `reportType` here; use the `executive_business_query` tool for those. Optional **uid** (UUID) overrides the search client id from MCP auth for `searchClientId` / conversion `uid`; omit **uid** for creds default. **ecoSystemId** still selects ecosystem scope where supported. MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it.";
 
 const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
   const c = async () => (getCreds ? await getCreds() : creds);
@@ -607,12 +634,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
     "analytics",
     analyticsToolDescription,
     analyticsInputSchemaBase.shape,
-    {
-      title: "Analytics",
-      readOnlyHint: true,
-      destructiveHint: false,
-      openWorldHint: true,
-    },
+    analyticsToolAnnotations,
     async (args) => {
       const {
         reportType,
@@ -720,7 +742,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         case reportTypes.searchQueryWithNoClicks: {
           console.error("searchQueryWithNoClicks triggered");
           analyticsResponse = await Analytics.searchQueryWithNoClicks({
-            searchClientId: credsForRequest.config.uid,
+            searchClientId: resolvedSearchClientUid(args, credsForRequest),
             startDate,
             endDate,
             count,
@@ -733,7 +755,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         case reportTypes.searchQueryWithResult: {
           console.error("searchQueryWithResult triggered");
           analyticsResponse = await Analytics.searchQueryWithResult({
-            searchClientId: credsForRequest.config.uid,
+            searchClientId: resolvedSearchClientUid(args, credsForRequest),
             startDate,
             endDate,
             count,
@@ -746,7 +768,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         case reportTypes.searchQueryWithoutResults: {
           console.error("searchQueryWithoutResults triggered");
           analyticsResponse = await Analytics.searchQueryWithoutResults({
-            searchClientId: credsForRequest.config.uid,
+            searchClientId: resolvedSearchClientUid(args, credsForRequest),
             startDate,
             endDate,
             count,
@@ -759,7 +781,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         case reportTypes.getAllSearchQuery: {
           console.error("getAllSearchQuery triggered");
           analyticsResponse = await Analytics.getAllSearchQuery({
-            searchClientId: credsForRequest.config.uid,
+            searchClientId: resolvedSearchClientUid(args, credsForRequest),
             startDate,
             endDate,
             count,
@@ -771,13 +793,13 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         }
         case reportTypes.getAllSearchConversion: {
           console.error("getAllSearchConversion triggered");
-          analyticsResponse = await Analytics.getAllSearchConversion({ searchClientId: credsForRequest.config.uid, startDate, endDate, count });
+          analyticsResponse = await Analytics.getAllSearchConversion({ searchClientId: resolvedSearchClientUid(args, credsForRequest), startDate, endDate, count });
           break;
         }
         case reportTypes.averageClickPosition: {
           console.error("averageClickPosition triggered");
           analyticsResponse = await Analytics.getAverageClickPosition({
-            searchClientId: credsForRequest.config.uid,
+            searchClientId: resolvedSearchClientUid(args, credsForRequest),
             startDate,
             endDate,
             internalUser: "all",
@@ -787,7 +809,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         case reportTypes.sessionDetails: {
           console.error("sessionDetails triggered");
           const sessionParams = {
-            searchClientId: credsForRequest.config.uid,
+            searchClientId: resolvedSearchClientUid(args, credsForRequest),
             startDate,
             endDate,
             count,
@@ -803,10 +825,10 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           analyticsResponse = await Analytics.getSessionDetails(sessionParams);
           break;
         }
-        case reportTypes.sessionListTable: {
-          console.error("sessionListTable triggered");
+        case reportTypes.sessionList: {
+          console.error("sessionList triggered");
           const sessionParams = {
-            searchClientId: credsForRequest.config.uid,
+            searchClientId: resolvedSearchClientUid(args, credsForRequest),
             startDate,
             endDate,
             count,
@@ -836,7 +858,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           if (args.ecoSystemId) {
             tileParams.ecoSystemId = args.ecoSystemId;
           } else {
-            tileParams.searchClientId = credsForRequest.config.uid;
+            tileParams.searchClientId = resolvedSearchClientUid(args, credsForRequest);
           }
           analyticsResponse = await Analytics.getTileDataContent(tileParams);
           break;
@@ -1007,10 +1029,10 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           });
           break;
         }
-        case reportTypes.tileDataMetrics1: {
-          console.error("tileDataMetrics1 triggered");
+        case reportTypes.overviewSessionCount: {
+          console.error("overviewSessionCount triggered");
           const tileParams = {
-            searchClientId: credsForRequest.config.uid,
+            searchClientId: resolvedSearchClientUid(args, credsForRequest),
             startDate,
             endDate,
           };
@@ -1029,10 +1051,10 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           }
           break;
         }
-        case reportTypes.tileDataMetrics2: {
-          console.error("tileDataMetrics2 triggered");
+        case reportTypes.overviewTileDataCount: {
+          console.error("overviewTileDataCount triggered");
           const tileParams = {
-            searchClientId: credsForRequest.config.uid,
+            searchClientId: resolvedSearchClientUid(args, credsForRequest),
             startDate,
             endDate,
           };
@@ -1150,7 +1172,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           if (args.ecoSystemId) {
             stf.ecoSystemId = args.ecoSystemId;
           } else {
-            stf.searchClientId = credsForRequest.config.uid;
+            stf.searchClientId = resolvedSearchClientUid(args, credsForRequest);
           }
           analyticsResponse = await Analytics.getSessionTrackingFormattedResult(stf);
           break;
@@ -1217,7 +1239,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         case reportTypes.conversionCurrentRelevanceIndex: {
           console.error("conversionCurrentRelevanceIndex triggered");
           analyticsResponse = await Analytics.postCurrentRelevanceIndex({
-            uid: credsForRequest.config.uid,
+            uid: resolvedSearchClientUid(args, credsForRequest),
             internalUser: internalUser ?? "all",
           });
           break;
@@ -1225,7 +1247,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         case reportTypes.conversionRelevanceIndex: {
           console.error("conversionRelevanceIndex triggered");
           analyticsResponse = await Analytics.postRelevanceIndex({
-            uid: credsForRequest.config.uid,
+            uid: resolvedSearchClientUid(args, credsForRequest),
             internalUser: internalUser ?? "all",
             from: startDate,
             to: endDate,
@@ -1268,7 +1290,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           analyticsResponse = await Analytics.getAttachedArticles({
             startDate,
             endDate,
-            searchClientId: credsForRequest.config.uid,
+            searchClientId: resolvedSearchClientUid(args, credsForRequest),
             ecoSystemId: args.ecoSystemId,
             count: conversionDetailLimit ?? count ?? 100,
             offset: conversionArticleOffset ?? conversionDetailOffset ?? 1,
@@ -1284,7 +1306,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           analyticsResponse = await Analytics.getCaseCreatedArticles({
             startDate,
             endDate,
-            searchClientId: credsForRequest.config.uid,
+            searchClientId: resolvedSearchClientUid(args, credsForRequest),
             ecoSystemId: args.ecoSystemId,
             searchType: conversionSearchTypeArticle ?? "all",
             count: conversionDetailLimit ?? count ?? 100,
@@ -1301,7 +1323,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           analyticsResponse = await Analytics.getCaseDeflectedArticles({
             startDate,
             endDate,
-            searchClientId: credsForRequest.config.uid,
+            searchClientId: resolvedSearchClientUid(args, credsForRequest),
             ecoSystemId: args.ecoSystemId,
             searchType: conversionSearchTypeArticle ?? "all",
             count: conversionDetailLimit ?? count ?? 100,

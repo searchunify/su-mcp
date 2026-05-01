@@ -7,6 +7,7 @@ import {
   sumTopLevelClicksExcludingHints,
 } from "./business-query-helpers.js";
 import { ENABLE_EXECUTIVE_RECIPE_REPORTS } from "./executive-recipes-config.js";
+import { executiveBusinessQueryToolAnnotations } from "../tool-annotations-meta.js";
 
 /** Stable `recipeId` values (no internal question codes in the API surface). */
 const RECIPES = {
@@ -17,7 +18,7 @@ const RECIPES = {
   self_solve_rate: "self_solve_rate",
   /** Phase 2 — Q1: leadership deflection counts (CSV download not exposed via MCP). */
   roi_case_deflection: "roi_case_deflection",
-  /** Phase 2 — Q2: tileDataMetrics2 + conversionSummary; optional leadership deflection-count for alignment. */
+  /** Phase 2 — Q2: overviewTileDataCount (SDK tileDataMetrics2) + conversionSummary; optional leadership deflection-count for alignment. */
   savings_from_conversion: "savings_from_conversion",
   /** Phase 2 — Q6: session list filtered for “no self-service” (default: no search, with case). */
   cases_without_self_service: "cases_without_self_service",
@@ -303,11 +304,11 @@ async function runTrafficRecipe(input, creds) {
   return {
     recipeId: RECIPES.traffic,
     summary:
-      "Traffic overview: tiles plus tileDataMetrics1 (visitors/sessions) and tileDataMetrics2 (searches, clicks, cases). Prefer metrics2 for search and click volumes.",
-    subcalls: [
+      "Traffic overview: tiles plus overviewSessionCount (visitor/session user KPIs) and overviewTileDataCount (search/click/case KPIs). Prefer overviewTileDataCount for search and click volumes.",
+      subcalls: [
       { id: "getTileData", ...rTiles, data: rTiles.ok ? rTiles.data : undefined },
-      { id: "tileDataMetrics1", ...rM1, data: rM1.ok ? rM1.data : undefined },
-      { id: "tileDataMetrics2", ...rM2, data: rM2.ok ? rM2.data : undefined },
+      { id: "overviewSessionCount", ...rM1, data: rM1.ok ? rM1.data : undefined },
+      { id: "overviewTileDataCount", ...rM2, data: rM2.ok ? rM2.data : undefined },
     ],
   };
 }
@@ -512,7 +513,7 @@ async function runSavingsFromConversionRecipe(input, creds) {
   const rM2 = normalizeSdkResult(results[0]);
   const rSum = normalizeSdkResult(results[1]);
   const subcalls = [
-    { id: "tileDataMetrics2", ...rM2, data: rM2.ok ? rM2.data : undefined },
+    { id: "overviewTileDataCount", ...rM2, data: rM2.ok ? rM2.data : undefined },
     { id: "conversionSummary", ...rSum, data: rSum.ok ? rSum.data : undefined },
   ];
   if (input.includeLeadershipDeflectionCountInSavings && results[2] !== undefined) {
@@ -526,7 +527,7 @@ async function runSavingsFromConversionRecipe(input, creds) {
   return {
     recipeId: RECIPES.savings_from_conversion,
     summary:
-      "Aligns overview tile searches/clicks/cases (tileDataMetrics2) with conversion summary rows for the same calendar from/to. Optional leadership deflection-count subcall uses the same window for executive alignment (leadership rollups remain quarterly-oriented server-side).",
+      "Aligns overview search/click/case KPIs (overviewTileDataCount) with conversion summary rows for the same calendar from/to. Optional leadership deflection-count subcall uses the same window for executive alignment (leadership rollups remain quarterly-oriented server-side).",
     conversionSummaryBody: convBody,
     subcalls,
   };
@@ -563,7 +564,7 @@ async function runCasesWithoutSelfServiceRecipe(input, creds) {
       defaultPreset: "no_search_with_case",
     },
     sessionQuery: sessionParams,
-    subcalls: [{ id: "sessionListTable", ...r, data: r.ok ? r.data : undefined }],
+    subcalls: [{ id: "sessionList", ...r, data: r.ok ? r.data : undefined }],
   };
 }
 
@@ -818,6 +819,7 @@ export const initializeExecutiveBusinessQueryTools = async ({
     "executive_business_query",
     "Executive analytics recipes: Phase 1 (traffic, search-no-click, relevance, content gap, self-solve), Phase 2 (ROI deflection count, savings vs conversion summary, sessions without self-service, stage1 direct-view trends, stage2 deflection + optional worst-article list), Phase 3 (article contrast, attach+journey, community CTR slice, top-case proxy, SU-GPT deferral). Per-subcall ok/statusCode in JSON. `POST /api/v2/leadership/*` uses the same auth as other `/api/v2/*` mirrors; legacy `POST /leadership/*` still requires `analytics-secret` on the analytics host. Leadership CSV/email download is not exposed via MCP. MCP does not send `tenantId` on any request (same as raw `analytics` session/tile routes). See analytics/docs/business-queries/.",
     businessQueryInput.shape,
+    executiveBusinessQueryToolAnnotations,
     async (args) => {
       const credsForRequest = await Promise.resolve(c());
       const { recipeId, ...input } = args;

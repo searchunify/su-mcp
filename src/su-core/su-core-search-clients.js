@@ -1,4 +1,5 @@
 import { formatForClaude } from "./../utils.js";
+import { getSearchClientsToolAnnotations } from "../tool-annotations-meta.js";
 
 const initializeSearchClientsTools = async ({ server, creds, getCreds }) => {
   const credsForRequest = async () => (getCreds ? await getCreds() : creds);
@@ -7,12 +8,7 @@ const initializeSearchClientsTools = async ({ server, creds, getCreds }) => {
     "get-search-clients",
     "Get list of all search clients configured in the SearchUnify instance. Returns minimal info: id, name, and uid for each search client.",
     {},
-    {
-      title: "Get Search Clients",
-      readOnlyHint: true,
-      destructiveHint: false,
-      openWorldHint: true,
-    },
+    getSearchClientsToolAnnotations,
     async () => {
       const c = await credsForRequest();
       if (!c) return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
