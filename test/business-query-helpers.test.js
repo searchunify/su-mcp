@@ -49,6 +49,23 @@ describe("business-query-helpers", () => {
     assert.equal(r.statusCode, 401);
   });
 
+  it("normalizeSdkResult maps 404 to not-present-in-this-release guidance", () => {
+    const r = normalizeSdkResult({
+      status: false,
+      message: {
+        response: { status: 404 },
+        message: "Request failed with status code 404",
+        config: { url: "https://example.com/api/v2/overview/readAnswers" },
+      },
+    });
+    assert.equal(r.ok, false);
+    assert.equal(r.statusCode, 404);
+    assert.equal(r.errorCode, "analytics_endpoint_not_available");
+    assert.ok(r.userMessage.includes("not present in this release"));
+    assert.ok(r.modelGuidance.includes("not present in this release"));
+    assert.equal(r.requestUrl, "https://example.com/api/v2/overview/readAnswers");
+  });
+
   it("sumTopLevelContentSourceClicks sums Data__1", () => {
     const rows = [
       { Name__1: "A", Data__1: 3 },

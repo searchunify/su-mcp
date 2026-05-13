@@ -55,7 +55,20 @@ export function normalizeSdkResult(raw) {
       err && typeof err === "object" && err.message
         ? err.message
         : String(err ?? "request failed");
-    return { ok: false, statusCode: status, error: msg };
+    const requestUrl =
+      err && typeof err === "object" && typeof err.config?.url === "string" ? err.config.url : undefined;
+    const base = { ok: false, statusCode: status, error: msg, requestUrl };
+    if (status === 404) {
+      return {
+        ...base,
+        errorCode: "analytics_endpoint_not_available",
+        userMessage:
+          "This SearchUnify analytics API is not present in this release (HTTP 404). It is not an authentication failure and not caused by the user’s question.",
+        modelGuidance:
+          "Say explicitly that this analytics endpoint is not present in this release of SearchUnify the MCP server is calling. Suggest the admin UI for the same report or upgrading to a release that exposes this `/api/v2/...` route.",
+      };
+    }
+    return base;
   }
   return { ok: false, statusCode: 0, error: "empty or unknown response" };
 }
