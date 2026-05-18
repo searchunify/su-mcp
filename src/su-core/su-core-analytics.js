@@ -158,13 +158,13 @@ const baseReportTypes = {
   leadershipCostSavingsExplicitDeflection: "leadershipCostSavingsExplicitDeflection",
   /**
    * Admin Leadership chart: **Unassisted Self Solve Volume (Implicit Deflection)**.
-   * `POST /api/v2/leadership/unassisted-self-solve-volume` → `implicit_deflection_volume`, `self_solve_volume`, `case_deflection`, `self_solve_rate`, … per quarter.
+   * `POST /api/v2/leadership/unassisted-self-solve-volume` → quarterly rows (MCP always last six quarters; no custom from/to).
    * **Not** `leadershipCostSavingsExplicitDeflection` (`implicit_deflection_count` is a different metric). **Not** `conversionCaseDeflectionStage1`.
    */
   leadershipUnassistedSelfSolveVolume: "leadershipUnassistedSelfSolveVolume",
   /**
    * Admin Leadership chart (4th section): **Assisted Self Solve Volume (Explicit Deflection)** — email report name *Assisted Self Solve Volume*.
-   * `POST /api/v2/leadership/assisted-self-solve-volume` (admin: `POST /leadership/assisted-self-solve-volume`). Quarterly rows; chart series map to API fields:
+   * `POST /api/v2/leadership/assisted-self-solve-volume` (admin: `POST /leadership/assisted-self-solve-volume`). MCP always last six quarters (no custom from/to). Chart series map to API fields:
    * Support Sessions → `total_web_case_sessions`; Total Web Cases Logged → `total_web_case_logged_sessions`; KM Used in Web Cases → `km_web_cases`;
    * Case Volume Deflected → `case_volume_deflected`; KM% Used in Web Cases → `km_web_cases_per`; Case Deflection % → `case_deflection`; KM Effectiveness % → `km_effectiveness`.
    * **Not** **leadershipAssistedCaseVolume** (*Assisted Case Volume* / `case_volume`, `case_resolved_via_kb`). **Not** USSV (`self_solve_rate`, `implicit_deflection_volume`). **Not** cost savings (`leadershipCostSavingsExplicitDeflection`). No `directlyViewSetting` on this chart.
@@ -182,8 +182,8 @@ const reportTypes = {
   ...(ENABLE_EXECUTIVE_RECIPE_REPORTS ? RECIPES : {}),
 };
 
-/** Leadership `reportType`s that may omit `from`/`to` when **leadershipUseBackendLastSixQuarters** is true. */
-const LEADERSHIP_OPTIONAL_FROM_TO_REPORT_TYPES = new Set([
+/** Leadership volume charts: admin fixed last-six-quarters rollups — MCP never sends custom from/to. */
+const LEADERSHIP_LAST_SIX_QUARTERS_REPORT_TYPES = new Set([
   reportTypes.leadershipCostSavingsExplicitDeflection,
   reportTypes.leadershipUnassistedSelfSolveVolume,
   reportTypes.leadershipAssistedSelfSolveVolume,
@@ -207,10 +207,7 @@ function analyticsStartEndDatesSatisfied(data) {
   if (data.reportType === reportTypes.leadershipGetContentSources) {
     return true;
   }
-  if (
-    LEADERSHIP_OPTIONAL_FROM_TO_REPORT_TYPES.has(data.reportType) &&
-    data.leadershipUseBackendLastSixQuarters === true
-  ) {
+  if (LEADERSHIP_LAST_SIX_QUARTERS_REPORT_TYPES.has(data.reportType)) {
     return true;
   }
   const s = data.startDate;
@@ -274,21 +271,15 @@ function wireContentGapSearchGrouping(contentGapSearchGrouping) {
   return contentGapSearchGrouping === true;
 }
 
-/** Leadership POST bodies: optional explicit `from`/`to` (omit both to use analytics *last six quarters* default). */
-function leadershipOptionalFromTo(args) {
-  if (args.leadershipUseBackendLastSixQuarters === true) {
-    return {};
-  }
-  return {
-    from: `${args.startDate} 00:00:00`,
-    to: `${args.endDate} 23:59:59`,
-  };
+/** Leadership volume APIs: omit from/to so analytics uses last six completed quarters (admin Leadership tab parity). */
+function leadershipLastSixQuartersWindow() {
+  return {};
 }
 
 /** uid xor ecoId + internalUser + optional quarter window for `/api/v2/leadership/*` routes that require scope. */
 function leadershipUidEcoBody(args, credsForRequest) {
   const internalUser = args.internalUser ?? "all";
-  const base = { internalUser, ...leadershipOptionalFromTo(args) };
+  const base = { internalUser, ...leadershipLastSixQuartersWindow() };
   if (args.ecoSystemId) {
     return { ...base, ecoId: args.ecoSystemId };
   }
@@ -304,7 +295,7 @@ function leadershipSelfSolveVolumeBody(args, credsForRequest) {
 function leadershipAssistedCaseVolumeBody(args) {
   const body = {
     internalUser: args.internalUser ?? "all",
-    ...leadershipOptionalFromTo(args),
+    ...leadershipLastSixQuartersWindow(),
   };
   const indexName = args.leadershipContentSourceIndexName?.trim();
   if (indexName) {
@@ -426,13 +417,13 @@ const contentGapReportRoutingHint =
   "**Content-gap routing:** (1) **Tile Data Content Gap** → **tileDataContent** — aggregated KPI-style payload for the Content Gap tiles (includes **daily averages** such as no-search / no-click / no-result cards; exact numeric fields live under `data`—read the JSON, do not invent field names). For **total** searches with no clicks vs no results use **different** endpoints: **totals with no clicks** → **contentSearchesWithNoClicks** (classification grid + totals in response) or high-level **overviewTileDataCount**; **totals with no results** → **contentSearchesWithNoResult**. “No searches & no click” daily averages are part of **tileDataContent** / **contentUnsuccessfulSummaryChart** depending on whether the user wants raw tile metrics or the unsuccessful chart series—prefer **tileDataContent** first for tile-language questions. (2) **Unsuccessful Searches** time-series chart → **contentUnsuccessfulSummaryChart**. (3) **Overview → Search Classifications** (admin Overview tab; four mutually defined buckets—call **all four** `reportType`s to list “major classifications” or explain volume/ variation): **All Searches** → **overviewTopSearches** (`POST /overview/topSearches`); **Successful Searches** (≥1 result) → **overviewSearchSessions** (`POST /overview/searchSessions`); **Searches With No Clicks** (had results, no click) → **contentSearchesWithNoClicks** (`POST /overview/searchsWithNoClicks`); **Searches With No Result** → **contentSearchesWithNoResult** (`POST /overview/searchesWithNoResult`). Each returns keyword rows with `users_count`, `session_count`, `count` (and `cluster_name` when grouped). Do **not** use legacy `getAllSearchQuery` / `searchQueryWithNoClicks` for admin parity. **Why totals vary between buckets or vs Overview tiles:** definitions differ (successful ⊂ all searches; no-click requires results; no-result is zero hits); **contentGapSearchGrouping** merges similar queries when `true` (admin “clustering”)—keep `false` unless the user wants clusters; compare the same date range and grouping flag. Drill-down for a selected keyword: **contentSuccessiveNoClicks** or **contentSuccessiveNoResults** + **contentGapText**. (4) **Sessions with unsuccessful searches** → **contentUnsuccessfulSearchSessionChart**. (5) **Articles Usage By Agents** → **contentArticleUsageByAgents**; drill-down → **contentSuccessiveArticlesUsage** + **contentGapText** (agent email).";
 
 const leadershipReportRoutingHint =
-  "**ASSV / Assisted Self Solve Volume → `leadershipAssistedSelfSolveVolume` ONLY** (admin Leadership chart *Assisted Self Solve Volume (Explicit Deflection)*; POST /leadership/assisted-self-solve-volume). **Do not fall back to `conversionCaseDeflectionStage1`** for ASSV, USSV, or Leadership questions — that is Conversions *Session Analytics Overview* (session funnel `global_searches`, not quarterly `km_effectiveness`). If a call failed or returned `retired_reportType`, retry **`leadershipAssistedSelfSolveVolume`** with **`leadershipUseBackendLastSixQuarters`: true** — never substitute conversionCaseDeflectionStage1. | Leadership chart | `reportType` | |---|---| | Assisted Self Solve Volume (Explicit Deflection) | **leadershipAssistedSelfSolveVolume** | | Unassisted Self Solve Volume (Implicit Deflection) | leadershipUnassistedSelfSolveVolume | | Assisted Case Volume | leadershipAssistedCaseVolume | | Cost Savings due to Explicit Deflection ($) | leadershipCostSavingsExplicitDeflection |. ASSV fields per quarter: `total_web_case_sessions`, `total_web_case_logged_sessions`, `km_web_cases`, `case_volume_deflected`, `km_web_cases_per`, `case_deflection`, `km_effectiveness`. Triggers: *Assisted Self Solve Volume*, *ASSV*, *KM effectiveness*, *KM Used in Web Cases*, *Case Volume Deflected* (Leadership ASSV chart). Not leadershipAssistedCaseVolume (`case_resolved_via_kb`). Not leadershipUnassistedSelfSolveVolume (`self_solve_rate`). Not leadershipCostSavingsExplicitDeflection (USD). No **directlyViewSetting** on ASSV. USSV: leadershipUnassistedSelfSolveVolume; MCP auto-sets **directlyViewSetting** when omitted. Quarter window: **leadershipUseBackendLastSixQuarters** true or startDate/endDate.";
+  "**ASSV / Assisted Self Solve Volume → `leadershipAssistedSelfSolveVolume` ONLY** (admin Leadership chart *Assisted Self Solve Volume (Explicit Deflection)*; POST /leadership/assisted-self-solve-volume). **Do not fall back to `conversionCaseDeflectionStage1`** for ASSV, USSV, or Leadership questions — that is Conversions *Session Analytics Overview* (session funnel `global_searches`, not quarterly `km_effectiveness`). If a call failed or returned `retired_reportType`, retry the correct Leadership reportType with no startDate/endDate (last six quarters) — never substitute conversionCaseDeflectionStage1. | Leadership chart | `reportType` | |---|---| | Assisted Self Solve Volume (Explicit Deflection) | **leadershipAssistedSelfSolveVolume** | | Unassisted Self Solve Volume (Implicit Deflection) | leadershipUnassistedSelfSolveVolume | | Assisted Case Volume | leadershipAssistedCaseVolume | | Cost Savings due to Explicit Deflection ($) | leadershipCostSavingsExplicitDeflection |. ASSV fields per quarter: `total_web_case_sessions`, `total_web_case_logged_sessions`, `km_web_cases`, `case_volume_deflected`, `km_web_cases_per`, `case_deflection`, `km_effectiveness`. Triggers: *Assisted Self Solve Volume*, *ASSV*, *KM effectiveness*, *KM Used in Web Cases*, *Case Volume Deflected* (Leadership ASSV chart). Not leadershipAssistedCaseVolume (`case_resolved_via_kb`). Not leadershipUnassistedSelfSolveVolume (`self_solve_rate`). Not leadershipCostSavingsExplicitDeflection (USD). No **directlyViewSetting** on ASSV. USSV: leadershipUnassistedSelfSolveVolume; MCP auto-sets **directlyViewSetting** when omitted. **Date window:** always last six completed quarters — omit startDate/endDate on Leadership calls (MCP ignores custom ranges).";
 
 const overviewDashboardMetricsHint =
   "**Overview dashboard KPI strips (`reportType`):** **overviewSessionCount** — visitors/sessions, search users, unique users (device/email). **overviewTileDataCount** — searches, clicks, cases, with/without result, unique searches. Prefer **overviewTileDataCount** for search/click/case volumes; use **overviewSessionCount** for audience/session context. (Do not use raw path names `tileDataMetrics1` / `tileDataMetrics2` in MCP — they are not valid `reportType` values.)";
 
 const reportTypeLeadershipPreamble =
-  "**User asks for Assisted Self Solve Volume / ASSV / Leadership ASSV / KM effectiveness (quarterly):** `reportType` = **leadershipAssistedSelfSolveVolume** + **leadershipUseBackendLastSixQuarters** true. Forbidden fallback: conversionCaseDeflectionStage1 (Conversions tab only, not Leadership). ";
+  "**Leadership dashboard reports are last-six-quarters only:** omit startDate/endDate (MCP never sends custom from/to). ASSV → leadershipAssistedSelfSolveVolume. Do not use conversionCaseDeflectionStage1. ";
 
 const reportTypeZodDescription = ENABLE_EXECUTIVE_RECIPE_REPORTS
   ? `${reportTypeLeadershipPreamble}Report id: raw API types (tileData*, search*, session*…) or the same \`recipeId\` values as \`executive_business_query\` (all Phase 1–3 orchestrations: traffic … su_gpt_attribution_deferred). ${overviewDashboardMetricsHint} ${conversionsReportRoutingHint} ${contentGapReportRoutingHint} ${leadershipReportRoutingHint}`
@@ -446,13 +437,13 @@ const baseAnalyticsFieldShape = {
     .string()
     .optional()
     .describe(
-      "Start date YYYY-MM-DD (maps to `from` / executive `from`). **Required** for most reportTypes. **Omit** for **leadershipGetContentSources**, or for Leadership quarterly charts when **leadershipUseBackendLastSixQuarters** is `true` (**leadershipCostSavingsExplicitDeflection**, **leadershipUnassistedSelfSolveVolume**, **leadershipAssistedSelfSolveVolume**, **leadershipAssistedCaseVolume**)."
+      "Start date YYYY-MM-DD (maps to `from`). **Required** for most reportTypes. **Ignored** for Leadership volume charts (leadershipUnassistedSelfSolveVolume, leadershipAssistedSelfSolveVolume, leadershipAssistedCaseVolume, leadershipCostSavingsExplicitDeflection) — those always use last six quarters. Omit for leadershipGetContentSources."
     ),
   endDate: z
     .string()
     .optional()
     .describe(
-      "End date YYYY-MM-DD (maps to `to` / executive `to`). Same optional rules as **startDate**."
+      "End date YYYY-MM-DD (maps to `to`). **Ignored** for Leadership volume charts (last six quarters). Required with startDate for other reportTypes."
     ),
   count: z
     .number()
@@ -645,7 +636,7 @@ const baseAnalyticsFieldShape = {
     .boolean()
     .optional()
     .describe(
-      "Leadership quarterly charts (**leadershipCostSavingsExplicitDeflection**, **leadershipUnassistedSelfSolveVolume**, **leadershipAssistedSelfSolveVolume**, **leadershipAssistedCaseVolume**): when `true`, omit `from`/`to` (last six completed quarters) and you may omit **startDate**/**endDate**. Ignored for **leadershipGetContentSources**."
+      "Deprecated/ignored: Leadership volume charts always use last six quarters without from/to. Do not set this to request a custom month/range — startDate/endDate are not applied to Leadership. Ignored for leadershipGetContentSources."
     ),
   leadershipContentSourceIndexName: z
     .string()
@@ -739,7 +730,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
       if (retiredReport) {
         return jsonTextResult({
           error: "retired_reportType",
-          message: `reportType "${reportType}" is retired and not valid. For **Assisted Self Solve Volume (ASSV)** / KM effectiveness / Leadership chart "${retiredReport.assistedSelfSolveChart}" use "${retiredReport.assistedSelfSolveInstead}" (POST /leadership/assisted-self-solve-volume) with leadershipUseBackendLastSixQuarters true. For **Unassisted Self Solve Volume (USSV)** use "${retiredReport.unassistedInstead}". For **Cost Savings ($)** use "${retiredReport.costSavingsInstead}". Do NOT use conversionCaseDeflectionStage1 as a fallback — it is Conversions Session Analytics Overview, not Leadership ASSV.`,
+          message: `reportType "${reportType}" is retired and not valid. For **Assisted Self Solve Volume (ASSV)** use "${retiredReport.assistedSelfSolveInstead}" (no startDate/endDate — last six quarters). For **USSV** use "${retiredReport.unassistedInstead}". For **Cost Savings ($)** use "${retiredReport.costSavingsInstead}". Do NOT use conversionCaseDeflectionStage1 as a fallback.`,
           reportType,
           assistedSelfSolveInstead: retiredReport.assistedSelfSolveInstead,
           unassistedInstead: retiredReport.unassistedInstead,
@@ -760,7 +751,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         return jsonTextResult({
           error: "invalid_analytics_date_window",
           message:
-            "startDate and endDate (YYYY-MM-DD) are required unless reportType is leadershipGetContentSources, or a leadership volume reportType with leadershipUseBackendLastSixQuarters true.",
+            "startDate and endDate (YYYY-MM-DD) are required unless reportType is leadershipGetContentSources or a Leadership volume chart (last six quarters; dates omitted on the wire).",
           reportType: args.reportType,
         });
       }
