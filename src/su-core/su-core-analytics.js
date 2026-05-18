@@ -21,6 +21,7 @@ import {
   runSuGptAttributionDeferredRecipe,
 } from "./su-core-business-queries.js";
 import { ENABLE_EXECUTIVE_RECIPE_REPORTS } from "./executive-recipes-config.js";
+import { resolveDirectlyViewSetting } from "./leadership-direct-view.js";
 
 /** Admin content-gap "Searches with no result" default `actionStatusFilters` when MCP omits `contentGapActionStatusFilters`. */
 const DEFAULT_SEARCHES_WITH_NO_RESULT_ACTION_STATUS_FILTERS = [
@@ -290,13 +291,9 @@ function leadershipUidEcoBody(args, credsForRequest) {
   return { ...base, uid: resolvedSearchClientUid(args, credsForRequest) };
 }
 
-/** USSV / ASSV body (`leadershipSelfSolveVolume` Joi): uid xor ecoId, optional quarter window, USSV-only `directlyViewSetting`. */
-function leadershipSelfSolveVolumeBody(args, credsForRequest, { includeDirectlyView = false } = {}) {
-  const body = leadershipUidEcoBody(args, credsForRequest);
-  if (includeDirectlyView && args.directlyViewSetting !== undefined) {
-    body.directlyViewSetting = args.directlyViewSetting;
-  }
-  return body;
+/** USSV / ASSV body (`leadershipSelfSolveVolume` Joi): uid xor ecoId, optional quarter window. */
+function leadershipSelfSolveVolumeBody(args, credsForRequest) {
+  return leadershipUidEcoBody(args, credsForRequest);
 }
 
 /** Assisted case volume (`leadershipAssistedCaseVolume` Joi): tenant-scoped; optional `indexName` + quarter window. */
@@ -425,7 +422,7 @@ const contentGapReportRoutingHint =
   "**Content-gap routing:** (1) **Tile Data Content Gap** → **tileDataContent** — aggregated KPI-style payload for the Content Gap tiles (includes **daily averages** such as no-search / no-click / no-result cards; exact numeric fields live under `data`—read the JSON, do not invent field names). For **total** searches with no clicks vs no results use **different** endpoints: **totals with no clicks** → **contentSearchesWithNoClicks** (classification grid + totals in response) or high-level **overviewTileDataCount**; **totals with no results** → **contentSearchesWithNoResult**. “No searches & no click” daily averages are part of **tileDataContent** / **contentUnsuccessfulSummaryChart** depending on whether the user wants raw tile metrics or the unsuccessful chart series—prefer **tileDataContent** first for tile-language questions. (2) **Unsuccessful Searches** time-series chart → **contentUnsuccessfulSummaryChart**. (3) **Overview → Search Classifications** (admin Overview tab; four mutually defined buckets—call **all four** `reportType`s to list “major classifications” or explain volume/ variation): **All Searches** → **overviewTopSearches** (`POST /overview/topSearches`); **Successful Searches** (≥1 result) → **overviewSearchSessions** (`POST /overview/searchSessions`); **Searches With No Clicks** (had results, no click) → **contentSearchesWithNoClicks** (`POST /overview/searchsWithNoClicks`); **Searches With No Result** → **contentSearchesWithNoResult** (`POST /overview/searchesWithNoResult`). Each returns keyword rows with `users_count`, `session_count`, `count` (and `cluster_name` when grouped). Do **not** use legacy `getAllSearchQuery` / `searchQueryWithNoClicks` for admin parity. **Why totals vary between buckets or vs Overview tiles:** definitions differ (successful ⊂ all searches; no-click requires results; no-result is zero hits); **contentGapSearchGrouping** merges similar queries when `true` (admin “clustering”)—keep `false` unless the user wants clusters; compare the same date range and grouping flag. Drill-down for a selected keyword: **contentSuccessiveNoClicks** or **contentSuccessiveNoResults** + **contentGapText**. (4) **Sessions with unsuccessful searches** → **contentUnsuccessfulSearchSessionChart**. (5) **Articles Usage By Agents** → **contentArticleUsageByAgents**; drill-down → **contentSuccessiveArticlesUsage** + **contentGapText** (agent email).";
 
 const leadershipReportRoutingHint =
-  "**Leadership tab (admin `analytics-v2/leadership`) — map exact chart title → `reportType` (never `conversionCaseDeflectionStage1`, never retired `leadershipDeflectionCount`):** | Admin chart | `reportType` | API | |---|---|---| | **Unassisted Self Solve Volume (Implicit Deflection)** | **leadershipUnassistedSelfSolveVolume** | `POST /leadership/unassisted-self-solve-volume` | | **Assisted Case Volume** | **leadershipAssistedCaseVolume** | `POST /leadership/assisted-case-volume` | | **Assisted Self Solve Volume (Explicit Deflection)** | **leadershipAssistedSelfSolveVolume** | `POST /leadership/assisted-self-solve-volume` | | **Cost Savings due to Explicit Deflection ($)** | **leadershipCostSavingsExplicitDeflection** | `POST /leadership/deflection-count` |. **Critical:** USSV implicit deflection is field **`implicit_deflection_volume`** on **leadershipUnassistedSelfSolveVolume** — **not** `implicit_deflection_count` from deflection-count (that is only for the Cost Savings chart). Phrases like *unassisted*, *implicit deflection*, *self solve volume*, *USSV* → **leadershipUnassistedSelfSolveVolume** only. *Assisted self solve*, *explicit deflection*, *ASSV*, *KM effectiveness* → **leadershipAssistedSelfSolveVolume**. *Assisted case*, *case volume*, *resolved via KB* → **leadershipAssistedCaseVolume** (+ **leadershipContentSourceIndexName** when filtering one content source). *Cost savings*, *cost per case*, *USD*, *explicit deflection savings* → **leadershipCostSavingsExplicitDeflection**. **directlyViewSetting** only on USSV. Quarter window: **startDate**/**endDate** or **leadershipUseBackendLastSixQuarters** `true` (last six quarters). **leadershipGetContentSources** for content-source dropdown.";
+  "**Leadership tab (admin `analytics-v2/leadership`) — map exact chart title → `reportType` (never `conversionCaseDeflectionStage1`, never retired `leadershipDeflectionCount`):** | Admin chart | `reportType` | API | |---|---|---| | **Unassisted Self Solve Volume (Implicit Deflection)** | **leadershipUnassistedSelfSolveVolume** | `POST /leadership/unassisted-self-solve-volume` | | **Assisted Case Volume** | **leadershipAssistedCaseVolume** | `POST /leadership/assisted-case-volume` | | **Assisted Self Solve Volume (Explicit Deflection)** | **leadershipAssistedSelfSolveVolume** | `POST /leadership/assisted-self-solve-volume` | | **Cost Savings due to Explicit Deflection ($)** | **leadershipCostSavingsExplicitDeflection** | `POST /leadership/deflection-count` |. **Critical:** USSV implicit deflection is field **`implicit_deflection_volume`** on **leadershipUnassistedSelfSolveVolume** — **not** `implicit_deflection_count` from deflection-count (that is only for the Cost Savings chart). Phrases like *unassisted*, *implicit deflection*, *self solve volume*, *USSV* → **leadershipUnassistedSelfSolveVolume** only. *Assisted self solve*, *explicit deflection*, *ASSV*, *KM effectiveness* → **leadershipAssistedSelfSolveVolume**. *Assisted case*, *case volume*, *resolved via KB* → **leadershipAssistedCaseVolume** (+ **leadershipContentSourceIndexName** when filtering one content source). *Cost savings*, *cost per case*, *USD*, *explicit deflection savings* → **leadershipCostSavingsExplicitDeflection**. **USSV Self Solve Rate parity:** MCP auto-sets **directlyViewSetting** from search client deflection config when omitted (same as admin `getDirectViewEnabled` → All Sessions vs All Search Sessions). Override with **directlyViewSetting** only when the user needs the other definition. Quarter window: **startDate**/**endDate** or **leadershipUseBackendLastSixQuarters** `true` (last six quarters). **leadershipGetContentSources** for content-source dropdown.";
 
 const overviewDashboardMetricsHint =
   "**Overview dashboard KPI strips (`reportType`):** **overviewSessionCount** — visitors/sessions, search users, unique users (device/email). **overviewTileDataCount** — searches, clicks, cases, with/without result, unique searches. Prefer **overviewTileDataCount** for search/click/case volumes; use **overviewSessionCount** for audience/session context. (Do not use raw path names `tileDataMetrics1` / `tileDataMetrics2` in MCP — they are not valid `reportType` values.)";
@@ -501,7 +498,7 @@ const baseAnalyticsFieldShape = {
     .boolean()
     .optional()
     .describe(
-      "**Unassisted Self Solve Volume (Implicit Deflection)** (`leadershipUnassistedSelfSolveVolume` only): maps to `directlyViewSetting` on POST `/leadership/unassisted-self-solve-volume` (admin toggles All Sessions vs All Search Sessions). Omit for analytics default."
+      "**Unassisted Self Solve Volume (Implicit Deflection)** (`leadershipUnassistedSelfSolveVolume` only): maps to `directlyViewSetting` on POST `/leadership/unassisted-self-solve-volume`. When omitted, MCP resolves from search client deflection settings (admin Leadership chart parity: All Sessions when `directly_viewed_results` is enabled). Set explicitly only to override."
     ),
   searchQuery: z
     .string()
@@ -1414,9 +1411,12 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.leadershipUnassistedSelfSolveVolume: {
-          analyticsResponse = await Analytics.postLeadershipUnassistedSelfSolveVolume(
-            leadershipSelfSolveVolumeBody(args, credsForRequest, { includeDirectlyView: true })
-          );
+          const ussvBody = leadershipSelfSolveVolumeBody(args, credsForRequest);
+          ussvBody.directlyViewSetting =
+            args.directlyViewSetting !== undefined
+              ? args.directlyViewSetting
+              : await resolveDirectlyViewSetting(credsForRequest, args);
+          analyticsResponse = await Analytics.postLeadershipUnassistedSelfSolveVolume(ussvBody);
           break;
         }
         case reportTypes.leadershipAssistedSelfSolveVolume: {
