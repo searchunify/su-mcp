@@ -73,7 +73,7 @@ const baseReportTypes = {
   /**
    * POST /api/v2/conversion/caseDeflectionStage1 — admin **Session Analytics Overview** (Search-page / Stage-1 funnel; same call as Conversions → session-report-graph-new after `caseDeflectionFormulaAndSettings`).
    * Counts are **sessions**, not unique users. Search page: `global_searches` (sessions with ≥1 search), `global_clicks` (sessions with ≥1 click on search/omnibar results), `global_no_clicks`, `global_click_exit`, `global_click_support` (clicks that continued to support). Support transitions from this funnel: `support_session`. Admin’s separate **Support page (Stage-2)** subgraph uses POST `/conversion/caseDeflectionStage2` (`support_search`, `support_clicks`, …)—not an MCP `reportType`; do not treat Stage-1 `support_*` as full Support-page totals.
-   * Unique-user questions → **overviewSessionCount** (`uniqueUsersByDevice`, `uniqueUsersByEmail`; `searchUsers` is search-**session** count). Content-source / filter click tree → **conversionClicksCountContentSource**. Not **conversionSessionTrackingDetails** (session grid only).
+   * Unique-user questions → **overviewSessionCount** (`uniqueUsersByDevice`, `uniqueUsersByEmail`; `searchUsers` is search-**session** count). Content-source / filter click tree → **conversionClicksCountContentSource**. Not **conversionSessionTrackingDetails** (session grid only). **Not** Leadership **Unassisted Self Solve Volume (Implicit Deflection)** — use **leadershipUnassistedSelfSolveVolume** (`reportType` hint).
    */
   conversionCaseDeflectionStage1: "conversionCaseDeflectionStage1",
   /** POST /api/v2/conversion/sessionDetails — Session Tracking grid (filters); not clickedResults / searchesOnClick drill-downs. */
@@ -149,14 +149,29 @@ const baseReportTypes = {
   llmResponseFeedback: "llmResponseFeedback",
   /** POST /api/v2/leadership/get-content-sources — list content sources (`elasticIndexName` and related facets). */
   leadershipGetContentSources: "leadershipGetContentSources",
-  /** POST /api/v2/leadership/deflection-count — Leadership **Cost Savings** chart only: quarterly `implicit_deflection_count` / `explicit_deflection_count` (not USSV/ASSV). */
-  leadershipDeflectionCount: "leadershipDeflectionCount",
-  /** POST /api/v2/leadership/unassisted-self-solve-volume — Leadership **Unassisted Self Solve Volume (USSV)** quarterly rollup. */
+  /**
+   * Admin Leadership chart: **Cost Savings due to Explicit Deflection ($)**.
+   * `POST /api/v2/leadership/deflection-count` → quarterly `implicit_deflection_count`, `explicit_deflection_count` (inputs to USD cost-savings math with **leadershipCostPerCaseUsd** in admin only).
+   */
+  leadershipCostSavingsExplicitDeflection: "leadershipCostSavingsExplicitDeflection",
+  /**
+   * Admin Leadership chart: **Unassisted Self Solve Volume (Implicit Deflection)**.
+   * `POST /api/v2/leadership/unassisted-self-solve-volume` → `implicit_deflection_volume`, `self_solve_volume`, `case_deflection`, `self_solve_rate`, … per quarter.
+   * **Not** `leadershipCostSavingsExplicitDeflection` (`implicit_deflection_count` is a different metric). **Not** `conversionCaseDeflectionStage1`.
+   */
   leadershipUnassistedSelfSolveVolume: "leadershipUnassistedSelfSolveVolume",
-  /** POST /api/v2/leadership/assisted-self-solve-volume — Leadership **Assisted Self Solve Volume (ASSV)** quarterly rollup. */
+  /**
+   * Admin Leadership chart: **Assisted Self Solve Volume (Explicit Deflection)**.
+   * `POST /api/v2/leadership/assisted-self-solve-volume` → `total_web_case_sessions`, `km_web_cases`, `case_volume_deflected`, `case_deflection`, `km_effectiveness`, …
+   */
   leadershipAssistedSelfSolveVolume: "leadershipAssistedSelfSolveVolume",
-  /** POST /api/v2/leadership/assisted-case-volume — Leadership **Assisted Case Volume** by content source (`indexName`). */
+  /**
+   * Admin Leadership chart: **Assisted Case Volume**.
+   * `POST /api/v2/leadership/assisted-case-volume` → `case_volume`, `case_resolved_via_kb`, `case_resolved_via_kb_percentage` (optional **leadershipContentSourceIndexName**).
+   */
   leadershipAssistedCaseVolume: "leadershipAssistedCaseVolume",
+  /** @deprecated Handler rejects with `deprecated_reportType` — was confused with USSV (`implicit_deflection_count` ≠ `implicit_deflection_volume`). */
+  leadershipDeflectionCount: "leadershipDeflectionCount",
 };
 
 const reportTypes = {
@@ -166,11 +181,22 @@ const reportTypes = {
 
 /** Leadership `reportType`s that may omit `from`/`to` when **leadershipUseBackendLastSixQuarters** is true. */
 const LEADERSHIP_OPTIONAL_FROM_TO_REPORT_TYPES = new Set([
-  reportTypes.leadershipDeflectionCount,
+  reportTypes.leadershipCostSavingsExplicitDeflection,
   reportTypes.leadershipUnassistedSelfSolveVolume,
   reportTypes.leadershipAssistedSelfSolveVolume,
   reportTypes.leadershipAssistedCaseVolume,
 ]);
+
+/** Removed `reportType` values — return a clear reroute error instead of calling the wrong API. */
+const DEPRECATED_LEADERSHIP_REPORT_TYPES = {
+  leadershipDeflectionCount: {
+    useInstead: "leadershipUnassistedSelfSolveVolume",
+    adminChart: "Unassisted Self Solve Volume (Implicit Deflection)",
+    wrongApi: "POST /leadership/deflection-count",
+    costSavingsInstead: "leadershipCostSavingsExplicitDeflection",
+    costSavingsChart: "Cost Savings due to Explicit Deflection ($)",
+  },
+};
 
 function analyticsStartEndDatesSatisfied(data) {
   if (data.reportType === reportTypes.leadershipGetContentSources) {
@@ -399,7 +425,7 @@ const contentGapReportRoutingHint =
   "**Content-gap routing:** (1) **Tile Data Content Gap** → **tileDataContent** — aggregated KPI-style payload for the Content Gap tiles (includes **daily averages** such as no-search / no-click / no-result cards; exact numeric fields live under `data`—read the JSON, do not invent field names). For **total** searches with no clicks vs no results use **different** endpoints: **totals with no clicks** → **contentSearchesWithNoClicks** (classification grid + totals in response) or high-level **overviewTileDataCount**; **totals with no results** → **contentSearchesWithNoResult**. “No searches & no click” daily averages are part of **tileDataContent** / **contentUnsuccessfulSummaryChart** depending on whether the user wants raw tile metrics or the unsuccessful chart series—prefer **tileDataContent** first for tile-language questions. (2) **Unsuccessful Searches** time-series chart → **contentUnsuccessfulSummaryChart**. (3) **Overview → Search Classifications** (admin Overview tab; four mutually defined buckets—call **all four** `reportType`s to list “major classifications” or explain volume/ variation): **All Searches** → **overviewTopSearches** (`POST /overview/topSearches`); **Successful Searches** (≥1 result) → **overviewSearchSessions** (`POST /overview/searchSessions`); **Searches With No Clicks** (had results, no click) → **contentSearchesWithNoClicks** (`POST /overview/searchsWithNoClicks`); **Searches With No Result** → **contentSearchesWithNoResult** (`POST /overview/searchesWithNoResult`). Each returns keyword rows with `users_count`, `session_count`, `count` (and `cluster_name` when grouped). Do **not** use legacy `getAllSearchQuery` / `searchQueryWithNoClicks` for admin parity. **Why totals vary between buckets or vs Overview tiles:** definitions differ (successful ⊂ all searches; no-click requires results; no-result is zero hits); **contentGapSearchGrouping** merges similar queries when `true` (admin “clustering”)—keep `false` unless the user wants clusters; compare the same date range and grouping flag. Drill-down for a selected keyword: **contentSuccessiveNoClicks** or **contentSuccessiveNoResults** + **contentGapText**. (4) **Sessions with unsuccessful searches** → **contentUnsuccessfulSearchSessionChart**. (5) **Articles Usage By Agents** → **contentArticleUsageByAgents**; drill-down → **contentSuccessiveArticlesUsage** + **contentGapText** (agent email).";
 
 const leadershipReportRoutingHint =
-  "**Leadership dashboard (admin analytics-v2/leadership):** Do **not** use **leadershipDeflectionCount** for unassisted/assisted self-solve questions—that endpoint is only the **Cost Savings** tile (`implicit_deflection_count`, `explicit_deflection_count` per quarter). Route by admin chart: (1) **Unassisted Self Solve Volume (USSV)** → **leadershipUnassistedSelfSolveVolume** (`POST /leadership/unassisted-self-solve-volume`; rows: `all_sessions`, `all_search_sessions`, `self_solve_volume`, `implicit_deflection_volume`, `case_deflection`, `self_solve_rate`, …). Pass **directlyViewSetting** when matching admin direct-page-view toggle. (2) **Assisted Self Solve Volume (ASSV)** → **leadershipAssistedSelfSolveVolume** (`POST /leadership/assisted-self-solve-volume`; rows: `total_web_case_sessions`, `km_web_cases`, `case_volume_deflected`, `case_deflection`, `km_effectiveness`, …). (3) **Assisted Case Volume** (by content source) → **leadershipAssistedCaseVolume** (`POST /leadership/assisted-case-volume`; optional **leadershipContentSourceIndexName** → `indexName`; rows: `case_volume`, `case_resolved_via_kb`, `case_resolved_via_kb_percentage`). (4) **Cost Savings / deflection counts for USD math** → **leadershipDeflectionCount** only. (5) Content-source picker → **leadershipGetContentSources**. For USSV + ASSV together, call **both** (1) and (2). Quarter window: pass **startDate**/**endDate**, or **leadershipUseBackendLastSixQuarters** `true` to omit dates (last six completed quarters). USD cost-savings download is **not** on MCP.";
+  "**Leadership tab (admin `analytics-v2/leadership`) — map exact chart title → `reportType` (never `conversionCaseDeflectionStage1`, never retired `leadershipDeflectionCount`):** | Admin chart | `reportType` | API | |---|---|---| | **Unassisted Self Solve Volume (Implicit Deflection)** | **leadershipUnassistedSelfSolveVolume** | `POST /leadership/unassisted-self-solve-volume` | | **Assisted Case Volume** | **leadershipAssistedCaseVolume** | `POST /leadership/assisted-case-volume` | | **Assisted Self Solve Volume (Explicit Deflection)** | **leadershipAssistedSelfSolveVolume** | `POST /leadership/assisted-self-solve-volume` | | **Cost Savings due to Explicit Deflection ($)** | **leadershipCostSavingsExplicitDeflection** | `POST /leadership/deflection-count` |. **Critical:** USSV implicit deflection is field **`implicit_deflection_volume`** on **leadershipUnassistedSelfSolveVolume** — **not** `implicit_deflection_count` from deflection-count (that is only for the Cost Savings chart). Phrases like *unassisted*, *implicit deflection*, *self solve volume*, *USSV* → **leadershipUnassistedSelfSolveVolume** only. *Assisted self solve*, *explicit deflection*, *ASSV*, *KM effectiveness* → **leadershipAssistedSelfSolveVolume**. *Assisted case*, *case volume*, *resolved via KB* → **leadershipAssistedCaseVolume** (+ **leadershipContentSourceIndexName** when filtering one content source). *Cost savings*, *cost per case*, *USD*, *explicit deflection savings* → **leadershipCostSavingsExplicitDeflection**. **directlyViewSetting** only on USSV. Quarter window: **startDate**/**endDate** or **leadershipUseBackendLastSixQuarters** `true` (last six quarters). **leadershipGetContentSources** for content-source dropdown.";
 
 const overviewDashboardMetricsHint =
   "**Overview dashboard KPI strips (`reportType`):** **overviewSessionCount** — visitors/sessions, search users, unique users (device/email). **overviewTileDataCount** — searches, clicks, cases, with/without result, unique searches. Prefer **overviewTileDataCount** for search/click/case volumes; use **overviewSessionCount** for audience/session context. (Do not use raw path names `tileDataMetrics1` / `tileDataMetrics2` in MCP — they are not valid `reportType` values.)";
@@ -416,7 +442,7 @@ const baseAnalyticsFieldShape = {
     .string()
     .optional()
     .describe(
-      "Start date YYYY-MM-DD (maps to `from` / executive `from`). **Required** for most reportTypes. **Omit** for **leadershipGetContentSources**, or for leadership volume `reportType`s when **leadershipUseBackendLastSixQuarters** is `true` (**leadershipDeflectionCount**, **leadershipUnassistedSelfSolveVolume**, **leadershipAssistedSelfSolveVolume**, **leadershipAssistedCaseVolume**)."
+      "Start date YYYY-MM-DD (maps to `from` / executive `from`). **Required** for most reportTypes. **Omit** for **leadershipGetContentSources**, or for Leadership quarterly charts when **leadershipUseBackendLastSixQuarters** is `true` (**leadershipCostSavingsExplicitDeflection**, **leadershipUnassistedSelfSolveVolume**, **leadershipAssistedSelfSolveVolume**, **leadershipAssistedCaseVolume**)."
     ),
   endDate: z
     .string()
@@ -475,7 +501,7 @@ const baseAnalyticsFieldShape = {
     .boolean()
     .optional()
     .describe(
-      "**leadershipUnassistedSelfSolveVolume** only: maps to `directlyViewSetting` on POST `/leadership/unassisted-self-solve-volume` (admin toggles All Sessions vs All Search Sessions in USSV chart). Omit to use analytics default."
+      "**Unassisted Self Solve Volume (Implicit Deflection)** (`leadershipUnassistedSelfSolveVolume` only): maps to `directlyViewSetting` on POST `/leadership/unassisted-self-solve-volume` (admin toggles All Sessions vs All Search Sessions). Omit for analytics default."
     ),
   searchQuery: z
     .string()
@@ -615,20 +641,22 @@ const baseAnalyticsFieldShape = {
     .boolean()
     .optional()
     .describe(
-      "Leadership quarterly `reportType`s (**leadershipDeflectionCount**, **leadershipUnassistedSelfSolveVolume**, **leadershipAssistedSelfSolveVolume**, **leadershipAssistedCaseVolume**): when `true`, omit `from`/`to` (analytics **last six completed quarters**) and you may omit **startDate**/**endDate**. When `false` or omitted, **startDate**/**endDate** are **required** for those reportTypes. Ignored for **leadershipGetContentSources**."
+      "Leadership quarterly charts (**leadershipCostSavingsExplicitDeflection**, **leadershipUnassistedSelfSolveVolume**, **leadershipAssistedSelfSolveVolume**, **leadershipAssistedCaseVolume**): when `true`, omit `from`/`to` (last six completed quarters) and you may omit **startDate**/**endDate**. Ignored for **leadershipGetContentSources**."
     ),
   leadershipContentSourceIndexName: z
     .string()
     .optional()
     .describe(
-      "**leadershipAssistedCaseVolume** only: `indexName` (elastic index) for one content source; omit for tenant-wide assisted case volume rollup."
+      "**Assisted Case Volume** (`leadershipAssistedCaseVolume` only): `indexName` (elastic index) for one content source; omit for tenant-wide rollup."
     ),
   leadershipCostPerCaseUsd: z
     .number()
     .min(0)
     .max(10000)
     .optional()
-    .describe("Reserved (legacy leadership USD cost field; not used by current MCP `reportType`s)."),
+    .describe(
+      "Admin **Cost Savings due to Explicit Deflection ($)** multiplies **leadershipCostSavingsExplicitDeflection** counts by cost-per-case in the UI only; MCP returns raw quarterly counts (not USD) unless a download API is added later."
+    ),
 };
 
 /** MCP `server.tool` is registered with `.shape` only; Zod refinements on a full schema are not applied by the SDK. Date-window rules are enforced in the handler via **analyticsStartEndDatesSatisfied**. */
@@ -637,8 +665,8 @@ const analyticsInputSchemaBase = ENABLE_EXECUTIVE_RECIPE_REPORTS
   : z.object(baseAnalyticsFieldShape);
 
 const analyticsToolDescription = ENABLE_EXECUTIVE_RECIPE_REPORTS
-  ? "Analytics from SearchUnify. Raw APIs: tileDataContent, overviewSessionCount, overviewTileDataCount, **Search Classifications (four buckets—see `reportType` hint):** overviewTopSearches, overviewSearchSessions, contentSearchesWithNoClicks, contentSearchesWithNoResult, sessions (`sessionDetails`, `sessionList`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, **Session Analytics Overview** → `conversionCaseDeflectionStage1` (session funnel; Support Stage-2 not a raw `reportType`), `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Content Gap tab** (`contentUnsuccessfulSummaryChart`, `contentSuccessiveNoClicks`, `contentSuccessiveNoResults`, `contentUnsuccessfulSearchSessionChart`, `contentArticleUsageByAgents`, `contentSuccessiveArticlesUsage`) with `contentGap*` helper fields. **Disambiguation:** *User gave a search phrase and wants documents clicked in Top Clicked Searches* → **conversionClickedResults** + **clickedResultsSearchQuery**. *User gave a doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *User gave an article URL from **Articles failed / deflected** grids* → **conversionSearchesCreatedCase** or **conversionSearchesOnDeflection** or **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Session Analytics Overview** (searches/clicks, Search vs Support page): **conversionCaseDeflectionStage1** + `reportType` hint; unique users → **overviewSessionCount**. **Not** **conversionSessionTrackingDetails** for conversion drill-downs. **Overview tab** (overviewSessionCount, overviewTileDataCount, overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **Leadership dashboard** (see `reportType` hint): USSV → `leadershipUnassistedSelfSolveVolume`; ASSV → `leadershipAssistedSelfSolveVolume`; assisted case volume → `leadershipAssistedCaseVolume` + `leadershipContentSourceIndexName`; cost-savings deflection counts only → `leadershipDeflectionCount` (**not** USSV/ASSV). **Executive orchestrations (same as `executive_business_query`):** all `reportType` values in Phase 1 (traffic, search_no_click_pct, … self_solve_rate), Phase 2 (roi_case_deflection, savings_from_conversion, cases_without_self_service, direct_views_case_creation, stage2_deflection), Phase 3 (article_deflection_contrast, attach_article_case_journey, community_content_ctr, top_article_driven_cases_month, su_gpt_attribution_deferred) — use startDate/endDate. Extra executive fields (e.g. costPerCase, communityNameHints) match the executive tool. Optional **uid** (UUID) overrides the search client id from MCP auth for `searchClientId` / conversion `uid`; omit **uid** for creds default. **ecoSystemId** still selects ecosystem scope where supported. MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it."
-  : "Analytics from SearchUnify. Raw APIs: tileDataContent, overviewSessionCount, overviewTileDataCount, **Search Classifications (four buckets—see `reportType` hint):** overviewTopSearches, overviewSearchSessions, contentSearchesWithNoClicks, contentSearchesWithNoResult, sessions (`sessionDetails`, `sessionList`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, **Session Analytics Overview** → `conversionCaseDeflectionStage1`, `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Content Gap tab** (`contentUnsuccessfulSummaryChart`, `contentSuccessiveNoClicks`, `contentSuccessiveNoResults`, `contentUnsuccessfulSearchSessionChart`, `contentArticleUsageByAgents`, `contentSuccessiveArticlesUsage`) with `contentGap*` helper fields. **Disambiguation:** *Search phrase → documents clicked (Top Clicked Searches)* → **conversionClickedResults** + **clickedResultsSearchQuery**. *Doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *Article URL from **Articles failed / deflected*** → **conversionSearchesCreatedCase** / **conversionSearchesOnDeflection** / **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Session Analytics Overview:** **conversionCaseDeflectionStage1**; unique users → **overviewSessionCount**. **Not** **conversionSessionTrackingDetails** for conversion drill-downs. **Overview tab** (overviewSessionCount, overviewTileDataCount, overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **Leadership dashboard** (see `reportType` hint): USSV → `leadershipUnassistedSelfSolveVolume`; ASSV → `leadershipAssistedSelfSolveVolume`; assisted case volume → `leadershipAssistedCaseVolume`; cost-savings deflection counts → `leadershipDeflectionCount` only. Executive recipe orchestrations are not available as `reportType` here; use the `executive_business_query` tool for those. Optional **uid** (UUID) overrides the search client id from MCP auth for `searchClientId` / conversion `uid`; omit **uid** for creds default. **ecoSystemId** still selects ecosystem scope where supported. MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it.";
+  ? "Analytics from SearchUnify. Raw APIs: tileDataContent, overviewSessionCount, overviewTileDataCount, **Search Classifications (four buckets—see `reportType` hint):** overviewTopSearches, overviewSearchSessions, contentSearchesWithNoClicks, contentSearchesWithNoResult, sessions (`sessionDetails`, `sessionList`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, **Session Analytics Overview** → `conversionCaseDeflectionStage1` (session funnel; Support Stage-2 not a raw `reportType`), `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Content Gap tab** (`contentUnsuccessfulSummaryChart`, `contentSuccessiveNoClicks`, `contentSuccessiveNoResults`, `contentUnsuccessfulSearchSessionChart`, `contentArticleUsageByAgents`, `contentSuccessiveArticlesUsage`) with `contentGap*` helper fields. **Disambiguation:** *User gave a search phrase and wants documents clicked in Top Clicked Searches* → **conversionClickedResults** + **clickedResultsSearchQuery**. *User gave a doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *User gave an article URL from **Articles failed / deflected** grids* → **conversionSearchesCreatedCase** or **conversionSearchesOnDeflection** or **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Session Analytics Overview** (searches/clicks, Search vs Support page): **conversionCaseDeflectionStage1** + `reportType` hint; unique users → **overviewSessionCount**. **Not** **conversionSessionTrackingDetails** for conversion drill-downs. **Overview tab** (overviewSessionCount, overviewTileDataCount, overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **Leadership dashboard** (see `reportType` hint): USSV → `leadershipUnassistedSelfSolveVolume`; ASSV → `leadershipAssistedSelfSolveVolume`; assisted case volume → `leadershipAssistedCaseVolume` + `leadershipContentSourceIndexName`; **Cost Savings due to Explicit Deflection ($)** → `leadershipCostSavingsExplicitDeflection` only (**not** USSV). **Executive orchestrations (same as `executive_business_query`):** all `reportType` values in Phase 1 (traffic, search_no_click_pct, … self_solve_rate), Phase 2 (roi_case_deflection, savings_from_conversion, cases_without_self_service, direct_views_case_creation, stage2_deflection), Phase 3 (article_deflection_contrast, attach_article_case_journey, community_content_ctr, top_article_driven_cases_month, su_gpt_attribution_deferred) — use startDate/endDate. Extra executive fields (e.g. costPerCase, communityNameHints) match the executive tool. Optional **uid** (UUID) overrides the search client id from MCP auth for `searchClientId` / conversion `uid`; omit **uid** for creds default. **ecoSystemId** still selects ecosystem scope where supported. MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it."
+  : "Analytics from SearchUnify. Raw APIs: tileDataContent, overviewSessionCount, overviewTileDataCount, **Search Classifications (four buckets—see `reportType` hint):** overviewTopSearches, overviewSearchSessions, contentSearchesWithNoClicks, contentSearchesWithNoResult, sessions (`sessionDetails`, `sessionList`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, **Session Analytics Overview** → `conversionCaseDeflectionStage1`, `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Content Gap tab** (`contentUnsuccessfulSummaryChart`, `contentSuccessiveNoClicks`, `contentSuccessiveNoResults`, `contentUnsuccessfulSearchSessionChart`, `contentArticleUsageByAgents`, `contentSuccessiveArticlesUsage`) with `contentGap*` helper fields. **Disambiguation:** *Search phrase → documents clicked (Top Clicked Searches)* → **conversionClickedResults** + **clickedResultsSearchQuery**. *Doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *Article URL from **Articles failed / deflected*** → **conversionSearchesCreatedCase** / **conversionSearchesOnDeflection** / **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Session Analytics Overview:** **conversionCaseDeflectionStage1**; unique users → **overviewSessionCount**. **Not** **conversionSessionTrackingDetails** for conversion drill-downs. **Overview tab** (overviewSessionCount, overviewTileDataCount, overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **Leadership dashboard** (see `reportType` hint): USSV → `leadershipUnassistedSelfSolveVolume`; ASSV → `leadershipAssistedSelfSolveVolume`; assisted case volume → `leadershipAssistedCaseVolume`; **Cost Savings due to Explicit Deflection ($)** → `leadershipCostSavingsExplicitDeflection`. Executive recipe orchestrations are not available as `reportType` here; use the `executive_business_query` tool for those. Optional **uid** (UUID) overrides the search client id from MCP auth for `searchClientId` / conversion `uid`; omit **uid** for creds default. **ecoSystemId** still selects ecosystem scope where supported. MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it.";
 
 const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
   const c = async () => (getCreds ? await getCreds() : creds);
@@ -703,6 +731,16 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         leadershipUseBackendLastSixQuarters,
       } = args;
       const credsForRequest = await c();
+      const deprecatedLeadership = DEPRECATED_LEADERSHIP_REPORT_TYPES[reportType];
+      if (deprecatedLeadership) {
+        return jsonTextResult({
+          error: "deprecated_reportType",
+          message: `reportType "${reportType}" is retired. For "${deprecatedLeadership.adminChart}" use "${deprecatedLeadership.useInstead}" (POST /leadership/unassisted-self-solve-volume). For "${deprecatedLeadership.costSavingsChart}" use "${deprecatedLeadership.costSavingsInstead}" (${deprecatedLeadership.wrongApi}). Do not use conversionCaseDeflectionStage1 for Leadership charts.`,
+          reportType,
+          useInstead: deprecatedLeadership.useInstead,
+          costSavingsInstead: deprecatedLeadership.costSavingsInstead,
+        });
+      }
       if (!credsForRequest) {
         return {
           content: [
@@ -1368,7 +1406,8 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           analyticsResponse = await Analytics.postLeadershipGetContentSources({});
           break;
         }
-        case reportTypes.leadershipDeflectionCount: {
+        // Retired: leadershipDeflectionCount — use leadershipCostSavingsExplicitDeflection or leadershipUnassistedSelfSolveVolume (see DEPRECATED_LEADERSHIP_REPORT_TYPES).
+        case reportTypes.leadershipCostSavingsExplicitDeflection: {
           analyticsResponse = await Analytics.postLeadershipDeflectionCount(
             leadershipUidEcoBody(args, credsForRequest)
           );
