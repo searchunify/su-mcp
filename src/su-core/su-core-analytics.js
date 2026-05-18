@@ -74,7 +74,8 @@ const baseReportTypes = {
   /**
    * POST /api/v2/conversion/caseDeflectionStage1 — admin **Session Analytics Overview** (Search-page / Stage-1 funnel; same call as Conversions → session-report-graph-new after `caseDeflectionFormulaAndSettings`).
    * Counts are **sessions**, not unique users. Search page: `global_searches` (sessions with ≥1 search), `global_clicks` (sessions with ≥1 click on search/omnibar results), `global_no_clicks`, `global_click_exit`, `global_click_support` (clicks that continued to support). Support transitions from this funnel: `support_session`. Admin’s separate **Support page (Stage-2)** subgraph uses POST `/conversion/caseDeflectionStage2` (`support_search`, `support_clicks`, …)—not an MCP `reportType`; do not treat Stage-1 `support_*` as full Support-page totals.
-   * Unique-user questions → **overviewSessionCount** (`uniqueUsersByDevice`, `uniqueUsersByEmail`; `searchUsers` is search-**session** count). Content-source / filter click tree → **conversionClicksCountContentSource**. Not **conversionSessionTrackingDetails** (session grid only). **Not** Leadership **Unassisted Self Solve Volume (Implicit Deflection)** — use **leadershipUnassistedSelfSolveVolume** (`reportType` hint).
+   * Unique-user questions → **overviewSessionCount** (`uniqueUsersByDevice`, `uniqueUsersByEmail`; `searchUsers` is search-**session** count). Content-source / filter click tree → **conversionClicksCountContentSource**. Not **conversionSessionTrackingDetails** (session grid only).
+   * **Not** Leadership dashboard: **not** *Assisted Self Solve Volume* / ASSV / KM effectiveness → use **leadershipAssistedSelfSolveVolume**; **not** *Unassisted Self Solve Volume* / USSV → **leadershipUnassistedSelfSolveVolume**. **Never** substitute this report when the user asked for Leadership ASSV/USSV or quarterly KM metrics — `global_*` session funnel ≠ Leadership rollups.
    */
   conversionCaseDeflectionStage1: "conversionCaseDeflectionStage1",
   /** POST /api/v2/conversion/sessionDetails — Session Tracking grid (filters); not clickedResults / searchesOnClick drill-downs. */
@@ -174,8 +175,6 @@ const baseReportTypes = {
    * `POST /api/v2/leadership/assisted-case-volume` → `case_volume`, `case_resolved_via_kb`, `case_resolved_via_kb_percentage` (optional **leadershipContentSourceIndexName**).
    */
   leadershipAssistedCaseVolume: "leadershipAssistedCaseVolume",
-  /** @deprecated Handler rejects with `deprecated_reportType` — was confused with USSV (`implicit_deflection_count` ≠ `implicit_deflection_volume`). */
-  leadershipDeflectionCount: "leadershipDeflectionCount",
 };
 
 const reportTypes = {
@@ -191,14 +190,16 @@ const LEADERSHIP_OPTIONAL_FROM_TO_REPORT_TYPES = new Set([
   reportTypes.leadershipAssistedCaseVolume,
 ]);
 
-/** Removed `reportType` values — return a clear reroute error instead of calling the wrong API. */
-const DEPRECATED_LEADERSHIP_REPORT_TYPES = {
+/**
+ * Retired `reportType` strings — not in the tool enum (so agents do not pick them). If passed anyway, return a reroute error.
+ * `leadershipDeflectionCount` was wrongly used for ASSV; it only ever mapped to deflection-count (USSV/cost-savings counts), not ASSV.
+ */
+const RETIRED_REPORT_TYPES = {
   leadershipDeflectionCount: {
-    useInstead: "leadershipUnassistedSelfSolveVolume",
-    adminChart: "Unassisted Self Solve Volume (Implicit Deflection)",
-    wrongApi: "POST /leadership/deflection-count",
+    assistedSelfSolveInstead: "leadershipAssistedSelfSolveVolume",
+    assistedSelfSolveChart: "Assisted Self Solve Volume (Explicit Deflection)",
+    unassistedInstead: "leadershipUnassistedSelfSolveVolume",
     costSavingsInstead: "leadershipCostSavingsExplicitDeflection",
-    costSavingsChart: "Cost Savings due to Explicit Deflection ($)",
   },
 };
 
@@ -425,14 +426,17 @@ const contentGapReportRoutingHint =
   "**Content-gap routing:** (1) **Tile Data Content Gap** → **tileDataContent** — aggregated KPI-style payload for the Content Gap tiles (includes **daily averages** such as no-search / no-click / no-result cards; exact numeric fields live under `data`—read the JSON, do not invent field names). For **total** searches with no clicks vs no results use **different** endpoints: **totals with no clicks** → **contentSearchesWithNoClicks** (classification grid + totals in response) or high-level **overviewTileDataCount**; **totals with no results** → **contentSearchesWithNoResult**. “No searches & no click” daily averages are part of **tileDataContent** / **contentUnsuccessfulSummaryChart** depending on whether the user wants raw tile metrics or the unsuccessful chart series—prefer **tileDataContent** first for tile-language questions. (2) **Unsuccessful Searches** time-series chart → **contentUnsuccessfulSummaryChart**. (3) **Overview → Search Classifications** (admin Overview tab; four mutually defined buckets—call **all four** `reportType`s to list “major classifications” or explain volume/ variation): **All Searches** → **overviewTopSearches** (`POST /overview/topSearches`); **Successful Searches** (≥1 result) → **overviewSearchSessions** (`POST /overview/searchSessions`); **Searches With No Clicks** (had results, no click) → **contentSearchesWithNoClicks** (`POST /overview/searchsWithNoClicks`); **Searches With No Result** → **contentSearchesWithNoResult** (`POST /overview/searchesWithNoResult`). Each returns keyword rows with `users_count`, `session_count`, `count` (and `cluster_name` when grouped). Do **not** use legacy `getAllSearchQuery` / `searchQueryWithNoClicks` for admin parity. **Why totals vary between buckets or vs Overview tiles:** definitions differ (successful ⊂ all searches; no-click requires results; no-result is zero hits); **contentGapSearchGrouping** merges similar queries when `true` (admin “clustering”)—keep `false` unless the user wants clusters; compare the same date range and grouping flag. Drill-down for a selected keyword: **contentSuccessiveNoClicks** or **contentSuccessiveNoResults** + **contentGapText**. (4) **Sessions with unsuccessful searches** → **contentUnsuccessfulSearchSessionChart**. (5) **Articles Usage By Agents** → **contentArticleUsageByAgents**; drill-down → **contentSuccessiveArticlesUsage** + **contentGapText** (agent email).";
 
 const leadershipReportRoutingHint =
-  "**Leadership Dashboard** (admin `analytics-v2/leadership`; four charts top-to-bottom). Always pick `reportType` from the **exact chart title** — never `conversionCaseDeflectionStage1`, never retired `leadershipDeflectionCount`. | Admin chart title | `reportType` | API | |---|---|---| | Cost Savings due to Explicit Deflection ($) | leadershipCostSavingsExplicitDeflection | POST /leadership/deflection-count | | Unassisted Self Solve Volume (Implicit Deflection) | leadershipUnassistedSelfSolveVolume | POST /leadership/unassisted-self-solve-volume | | Assisted Case Volume | leadershipAssistedCaseVolume | POST /leadership/assisted-case-volume | | **Assisted Self Solve Volume (Explicit Deflection)** | **leadershipAssistedSelfSolveVolume** | **POST /leadership/assisted-self-solve-volume** |. **ASSV — when user wants Assisted Self Solve Volume data:** use **leadershipAssistedSelfSolveVolume** immediately. Triggers: chart title *Assisted Self Solve Volume (Explicit Deflection)*; email/report name *Assisted Self Solve Volume*; *ASSV*; *KM effectiveness*; *KM Used in Web Cases*; *KM% Used in Web Cases*; *Case Volume Deflected* (in this Leadership chart, not Assisted Case Volume); *Support Sessions* + *Total Web Cases Logged* quarterly series; *explicit deflection* **self solve** / **KM** metrics (not USD cost savings). Response fields: `total_web_case_sessions`, `total_web_case_logged_sessions`, `km_web_cases`, `case_volume_deflected`, `km_web_cases_per`, `case_deflection`, `km_effectiveness` per `quarter`. Do **not** pass **directlyViewSetting** (admin ASSV API omits it; USSV only). Do **not** use leadershipAssistedCaseVolume — that is the separate *Assisted Case Volume* chart (`case_volume`, `case_resolved_via_kb`). Do **not** use leadershipUnassistedSelfSolveVolume (`self_solve_rate`, `implicit_deflection_volume`). Do **not** use leadershipCostSavingsExplicitDeflection for ASSV (*Explicit Deflection ($)* chart is USD; `explicit_deflection_count` ≠ ASSV). **USSV:** *unassisted*, *implicit deflection*, *self solve rate*, *USSV* → leadershipUnassistedSelfSolveVolume; `implicit_deflection_volume` not `implicit_deflection_count`. MCP auto-sets **directlyViewSetting** for USSV only when omitted. Quarter window: **leadershipUseBackendLastSixQuarters** `true` (last six quarters, omit startDate/endDate) or **startDate**/**endDate**. **leadershipGetContentSources** for Assisted Case Volume content-source filter only.";
+  "**ASSV / Assisted Self Solve Volume → `leadershipAssistedSelfSolveVolume` ONLY** (admin Leadership chart *Assisted Self Solve Volume (Explicit Deflection)*; POST /leadership/assisted-self-solve-volume). **Do not fall back to `conversionCaseDeflectionStage1`** for ASSV, USSV, or Leadership questions — that is Conversions *Session Analytics Overview* (session funnel `global_searches`, not quarterly `km_effectiveness`). If a call failed or returned `retired_reportType`, retry **`leadershipAssistedSelfSolveVolume`** with **`leadershipUseBackendLastSixQuarters`: true** — never substitute conversionCaseDeflectionStage1. | Leadership chart | `reportType` | |---|---| | Assisted Self Solve Volume (Explicit Deflection) | **leadershipAssistedSelfSolveVolume** | | Unassisted Self Solve Volume (Implicit Deflection) | leadershipUnassistedSelfSolveVolume | | Assisted Case Volume | leadershipAssistedCaseVolume | | Cost Savings due to Explicit Deflection ($) | leadershipCostSavingsExplicitDeflection |. ASSV fields per quarter: `total_web_case_sessions`, `total_web_case_logged_sessions`, `km_web_cases`, `case_volume_deflected`, `km_web_cases_per`, `case_deflection`, `km_effectiveness`. Triggers: *Assisted Self Solve Volume*, *ASSV*, *KM effectiveness*, *KM Used in Web Cases*, *Case Volume Deflected* (Leadership ASSV chart). Not leadershipAssistedCaseVolume (`case_resolved_via_kb`). Not leadershipUnassistedSelfSolveVolume (`self_solve_rate`). Not leadershipCostSavingsExplicitDeflection (USD). No **directlyViewSetting** on ASSV. USSV: leadershipUnassistedSelfSolveVolume; MCP auto-sets **directlyViewSetting** when omitted. Quarter window: **leadershipUseBackendLastSixQuarters** true or startDate/endDate.";
 
 const overviewDashboardMetricsHint =
   "**Overview dashboard KPI strips (`reportType`):** **overviewSessionCount** — visitors/sessions, search users, unique users (device/email). **overviewTileDataCount** — searches, clicks, cases, with/without result, unique searches. Prefer **overviewTileDataCount** for search/click/case volumes; use **overviewSessionCount** for audience/session context. (Do not use raw path names `tileDataMetrics1` / `tileDataMetrics2` in MCP — they are not valid `reportType` values.)";
 
+const reportTypeLeadershipPreamble =
+  "**User asks for Assisted Self Solve Volume / ASSV / Leadership ASSV / KM effectiveness (quarterly):** `reportType` = **leadershipAssistedSelfSolveVolume** + **leadershipUseBackendLastSixQuarters** true. Forbidden fallback: conversionCaseDeflectionStage1 (Conversions tab only, not Leadership). ";
+
 const reportTypeZodDescription = ENABLE_EXECUTIVE_RECIPE_REPORTS
-  ? `Report id: raw API types (tileData*, search*, session*…) or the same \`recipeId\` values as \`executive_business_query\` (all Phase 1–3 orchestrations: traffic … su_gpt_attribution_deferred). ${overviewDashboardMetricsHint} ${conversionsReportRoutingHint} ${contentGapReportRoutingHint} ${leadershipReportRoutingHint}`
-  : `Report id: raw SearchUnify analytics APIs only (tileData*, search*, session*…). Executive recipe IDs are not available on this tool; use \`executive_business_query\` for those orchestrations. ${overviewDashboardMetricsHint} ${conversionsReportRoutingHint} ${contentGapReportRoutingHint} ${leadershipReportRoutingHint}`;
+  ? `${reportTypeLeadershipPreamble}Report id: raw API types (tileData*, search*, session*…) or the same \`recipeId\` values as \`executive_business_query\` (all Phase 1–3 orchestrations: traffic … su_gpt_attribution_deferred). ${overviewDashboardMetricsHint} ${conversionsReportRoutingHint} ${contentGapReportRoutingHint} ${leadershipReportRoutingHint}`
+  : `${reportTypeLeadershipPreamble}Report id: raw SearchUnify analytics APIs only (tileData*, search*, session*…). Executive recipe IDs are not available on this tool; use \`executive_business_query\` for those orchestrations. ${overviewDashboardMetricsHint} ${conversionsReportRoutingHint} ${contentGapReportRoutingHint} ${leadershipReportRoutingHint}`;
 
 const baseAnalyticsFieldShape = {
   reportType: z
@@ -731,14 +735,15 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         leadershipUseBackendLastSixQuarters,
       } = args;
       const credsForRequest = await c();
-      const deprecatedLeadership = DEPRECATED_LEADERSHIP_REPORT_TYPES[reportType];
-      if (deprecatedLeadership) {
+      const retiredReport = RETIRED_REPORT_TYPES[reportType];
+      if (retiredReport) {
         return jsonTextResult({
-          error: "deprecated_reportType",
-          message: `reportType "${reportType}" is retired. For "${deprecatedLeadership.adminChart}" use "${deprecatedLeadership.useInstead}" (POST /leadership/unassisted-self-solve-volume). For "${deprecatedLeadership.costSavingsChart}" use "${deprecatedLeadership.costSavingsInstead}" (${deprecatedLeadership.wrongApi}). Do not use conversionCaseDeflectionStage1 for Leadership charts.`,
+          error: "retired_reportType",
+          message: `reportType "${reportType}" is retired and not valid. For **Assisted Self Solve Volume (ASSV)** / KM effectiveness / Leadership chart "${retiredReport.assistedSelfSolveChart}" use "${retiredReport.assistedSelfSolveInstead}" (POST /leadership/assisted-self-solve-volume) with leadershipUseBackendLastSixQuarters true. For **Unassisted Self Solve Volume (USSV)** use "${retiredReport.unassistedInstead}". For **Cost Savings ($)** use "${retiredReport.costSavingsInstead}". Do NOT use conversionCaseDeflectionStage1 as a fallback — it is Conversions Session Analytics Overview, not Leadership ASSV.`,
           reportType,
-          useInstead: deprecatedLeadership.useInstead,
-          costSavingsInstead: deprecatedLeadership.costSavingsInstead,
+          assistedSelfSolveInstead: retiredReport.assistedSelfSolveInstead,
+          unassistedInstead: retiredReport.unassistedInstead,
+          costSavingsInstead: retiredReport.costSavingsInstead,
         });
       }
       if (!credsForRequest) {
@@ -1406,7 +1411,6 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           analyticsResponse = await Analytics.postLeadershipGetContentSources({});
           break;
         }
-        // Retired: leadershipDeflectionCount — use leadershipCostSavingsExplicitDeflection or leadershipUnassistedSelfSolveVolume (see DEPRECATED_LEADERSHIP_REPORT_TYPES).
         case reportTypes.leadershipCostSavingsExplicitDeflection: {
           analyticsResponse = await Analytics.postLeadershipDeflectionCount(
             leadershipUidEcoBody(args, credsForRequest)
