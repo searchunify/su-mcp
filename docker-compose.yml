@@ -21,6 +21,7 @@ services:
       OAUTH_ENCRYPTION_KEY: ${OAUTH_ENCRYPTION_KEY:-}
       REDIS_URL: ${REDIS_URL:-}
       SU_TIMEOUT: ${SU_TIMEOUT:-60000}
+      OPENAI_DOMAIN_VERIFICATION_TOKEN: ${OPENAI_DOMAIN_VERIFICATION_TOKEN:-}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:${MCP_HTTP_PORT:-3000}/mcp"]
       interval: 30s

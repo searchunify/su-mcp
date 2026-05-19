@@ -210,6 +210,9 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
     next();
   });
 
+  // Rate-limit /mcp before the OAuth auth middleware runs so unauthenticated floods don't bypass it
+  app.use("/mcp", mcpRateLimit);
+
   // Mount the SDK's OAuth auth router (handles /authorize, /token, /register, /.well-known/*)
   // Uses basePath so endpoints are accessible behind a reverse proxy (e.g., /7777/authorize)
   app.use(basePath, mcpAuthRouter({
@@ -532,6 +535,13 @@ async function runHttp(creds, port) {
       "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
     });
     next();
+  });
+
+  // OpenAI domain verification — serves the challenge token at the well-known URL
+  app.get("/.well-known/openai-apps-challenge", (req, res) => {
+    const token = process.env.OPENAI_DOMAIN_VERIFICATION_TOKEN;
+    if (!token) return res.status(404).end();
+    res.type("text/plain").send(token);
   });
 
   // General rate limit for MCP tool-call endpoints — generous to avoid blocking active users
