@@ -258,9 +258,10 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
   });
 
   // Callback from SU's /authorise_redirect — SU sends us back with ?code=xxx&state=sessionId
-  app.get(`${basePath}/su-callback`, requireStore, authRateLimit, async (req, res) => {
+  // Handles both GET (query params) and POST (form_post response mode used by some clients e.g. Copilot)
+  app.all(`${basePath}/su-callback`, requireStore, authRateLimit, express.urlencoded({ extended: false, limit: "10kb" }), async (req, res) => {
     try {
-      const { code, state } = req.query;
+      const { code, state } = { ...req.query, ...req.body };
       console.error(`[OAuth] /su-callback received — code: ${code?.slice(0, 8)}... state: ${state?.slice(0, 8)}... (len: ${state?.length})`);
       if (!code || !state) {
         return res.status(400).send("Missing code or state from SearchUnify");
