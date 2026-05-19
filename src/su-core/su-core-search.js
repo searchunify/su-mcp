@@ -1,5 +1,9 @@
 import { z } from "zod";
 import { formatForClaude, formatArraysToString } from "./../utils.js";
+import {
+  searchToolAnnotations,
+  getFilterOptionsToolAnnotations,
+} from "../tool-annotations-meta.js";
 
 const aggregationSchema = z.object({
   type: z.string().describe("aggregation/facet type (e.g. documentation_category, _index)"),
@@ -16,12 +20,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     sortBy: z.enum(["_score", "post_time"]).optional().describe("field to sort results by, e.g. _score or post_time"),
     versionResults: z.boolean().default(false).optional().describe("Whether to use versioning for results. Defaults to false."),
     // sortOrder: z.enum(["asc", "desc"]).optional().describe("sort order for results, asc or desc"),
-  }, {
-    title: "Search",
-    readOnlyHint: true,
-    destructiveHint: false,
-    openWorldHint: true,
-  }, async ({ searchString, aggregations, page, pageSize, sortBy, versionResults }) => {
+  }, searchToolAnnotations, async ({ searchString, aggregations, page, pageSize, sortBy, versionResults }) => {
     const c = await credsForRequest();
     if (!c) return { content: [{ type: "text", text: "Not authenticated. Please call the login tool first." }] };
     const Search = c.suRestClient.Search();
@@ -87,12 +86,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       searchString: z.string().min(3).max(100).describe("search query, a single word or sentence"),
       aggregations: z.array(aggregationSchema).optional().describe("optional list of current filters to get filter options in context of filtered results"),
     },
-    {
-      title: "Get Filter Options",
-      readOnlyHint: true,
-      destructiveHint: false,
-      openWorldHint: true,
-    },
+    getFilterOptionsToolAnnotations,
     async ({ searchString, aggregations }) => {
       const c = await credsForRequest();
       if (!c) return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
