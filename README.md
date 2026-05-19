@@ -18,7 +18,7 @@ By leveraging [su-sdk-js](https://www.npmjs.com/package/su-sdk), this server exp
 
 ## Tools
 
-The MCP server exposes **5 tools** that AI assistants can invoke:
+The MCP server exposes **6 tools** that AI assistants can invoke:
 
 ### 1. `search`
 
@@ -89,16 +89,33 @@ Retrieves available filter/facet options for a search query. Use this tool first
 
 ### 4. `analytics`
 
-Retrieves analytics reports from SearchUnify.
+Retrieves analytics reports from SearchUnify (Overview, Conversions, Content, Sessions, and **Leadership**). Calls go through the SDK to **`POST /api/v2/...`** on your admin instance. MCP sets `X-SearchUnify-MCP-Track: 1` for consumption tracking.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `reportType` | `string` (enum) | Yes | Type of analytics report. See supported values below. |
-| `startDate` | `string` | Yes | Start date of the report period. |
-| `endDate` | `string` | Yes | End date of the report period. |
-| `count` | `number` | Yes | Number of records to fetch. |
+| `reportType` | `string` (enum) | Yes | Report identifier. See tool schema for the full enum (Overview, Conversions, Leadership, etc.). |
+| `startDate` | `string` | Usually | Start date (`YYYY-MM-DD`). **Ignored** for Leadership volume charts — they always use last six quarters. |
+| `endDate` | `string` | Usually | End date (`YYYY-MM-DD`). **Ignored** for Leadership volume charts. |
+| `count` | `number` | Usually | Row limit where the underlying API supports it. |
+| `uid` / `ecoSystemId` | `string` | Varies | Search client or ecosystem scope (mutually exclusive where required). |
+| `internalUser` | `string` | No | `all`, `internal`, `external`, or `externalOnly` (Leadership / Conversions). |
+| `directlyViewSetting` | `boolean` | No | **USSV only** (`leadershipUnassistedSelfSolveVolume`). Resolved from deflection settings when omitted. |
 
-**Supported `reportType` values:**
+**Leadership `reportType` values** (Admin Leadership tab parity; MCP does not send custom `from`/`to`):
+
+| `reportType` | Admin chart | Backend route |
+|--------------|-------------|----------------|
+| `leadershipAssistedSelfSolveVolume` | Assisted Self Solve Volume (Explicit Deflection) | `POST /api/v2/leadership/assisted-self-solve-volume` |
+| `leadershipUnassistedSelfSolveVolume` | Unassisted Self Solve Volume (Implicit Deflection) | `POST /api/v2/leadership/unassisted-self-solve-volume` |
+| `leadershipAssistedCaseVolume` | Assisted Case Volume | `POST /api/v2/leadership/assisted-case-volume` |
+| `leadershipCostSavingsExplicitDeflection` | Cost Savings due to Explicit Deflection ($) — **counts only** | `POST /api/v2/leadership/deflection-count` |
+| `leadershipGetContentSources` | Content source list for facets | `POST /api/v2/leadership/get-content-sources` |
+
+**Cost savings:** `leadershipCostPerCaseUsd` in the tool schema is for documentation only; the Admin UI multiplies deflection counts by cost-per-case locally. MCP returns quarterly `explicit_deflection_count` / `implicit_deflection_count`, not USD, unless a download API is added later.
+
+**Do not substitute** `conversionCaseDeflectionStage1` for Leadership ASSV/USSV — that is the Conversions session funnel (`global_searches`), not quarterly Leadership rollups.
+
+**Common legacy / search query `reportType` values:**
 
 | Value | Description |
 |-------|-------------|
@@ -127,16 +144,16 @@ Lists all search clients configured in the SearchUnify instance. Returns minimal
 
 ---
 
-### 5. `executive_business_query`
+### 6. `executive_business_query`
 
-Runs **Phase 1 executive** analytics recipes (Q11 traffic, Q12 search-without-click %, Q5 relevance, Q13 content gap, Q4 self-solve) by composing existing analytics HTTP APIs. Responses are JSON with **per-subcall** status so partial failures stay visible (for example **401** when leadership is called without a proxy that injects `analytics-secret`).
+Runs **Phase 1 executive** analytics recipes (Q11 traffic, Q12 search-without-click %, Q5 relevance, Q13 content gap, Q4 self-solve) by composing existing analytics HTTP APIs. Responses are JSON with **per-subcall** status so partial failures stay visible (for example **401** on auth or upstream errors).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `recipeId` | enum | Yes | `Q11_traffic`, `Q12_search_no_click_pct`, `Q5_relevance_rate`, `Q13_content_gap`, `Q4_self_solve_rate`. |
 | `tenantId`, `from`, `to` | strings | Yes | Tenant UUID and date range (`YYYY-MM-DD`). |
 | `uid` / `ecoId` | UUID | No | Search client or ecosystem scope (same rules as analytics APIs). |
-| `includeLeadershipQuarterly` | boolean | No | Q4 only: also call `/leadership/*` USSV + ASSV. Use an `instance` URL that routes analytics through **admin** (or another BFF) so **`analytics-secret`** is added upstream; calling the analytics service directly may return **401** for these paths. |
+| `includeLeadershipQuarterly` | boolean | No | Q4 only: also call **`/api/v2/leadership/*`** USSV + ASSV (same **`/api/v2/*`** auth as other analytics mirrors). |
 
 **Docs:** [`analytics/docs/business-queries/README.md`](../analytics/docs/business-queries/README.md) (formulas, rollup checklist, orchestration).
 
@@ -385,7 +402,7 @@ All header names use the `searchunify-` prefix (lowercase):
 | `searchunify-instance` | Yes | Your SearchUnify instance URL (e.g. `https://your-instance.searchunify.com`). |
 | `searchunify-uid` | Yes | Search Client UID. |
 | `searchunify-auth-type` | Yes | Authentication method: `apiKey`, `password`, or `clientCredentials`. |
-| `searchunify-timeout` | No | Request timeout in milliseconds. Defaults to `60000`. |
+| `searchunify-timeout` | No | Per-request SDK timeout in milliseconds. Defaults to `60000`. Use **120000** or higher for `leadershipCostSavingsExplicitDeflection` on large tenants if you see Axios timeout errors. Also set in `creds.json` as `"timeout": 120000` or `SU_TIMEOUT` for OAuth flows. |
 
 **Additional headers by auth type:**
 
@@ -619,6 +636,11 @@ Claude will use the `analytics` tool with `reportType: searchQueryWithNoClicks` 
 
 Claude will use `get-search-clients` to show all available search clients with their names and UIDs.
 
+**Leadership cost savings / deflection:**
+> "Show Leadership explicit and implicit deflection counts for the last six quarters"
+
+Claude will use `analytics` with `reportType: leadershipCostSavingsExplicitDeflection` (omit `startDate`/`endDate`). If the call times out at 60s, increase `searchunify-timeout` — deflection-count runs two rollup queries and is slower than ASSV or USSV alone.
+
 ---
 
 ## Testing the MCP Server
@@ -709,9 +731,26 @@ su-mcp/
     └── su-core/
         ├── index.js                  # Core tools initializer
         ├── su-core-search.js         # search and get-filter-options tools
-        ├── su-core-analytics.js      # analytics tool
-        └── su-core-search-clients.js # get-search-clients tool
+        ├── su-core-analytics.js          # analytics tool (incl. Leadership reportTypes)
+        ├── su-core-business-queries.js   # executive_business_query recipes
+        ├── leadership-direct-view.js     # USSV directlyViewSetting resolver
+        └── su-core-search-clients.js     # get-search-clients tool
 ```
+
+---
+
+## Leadership reports and timeouts
+
+MCP uses the same SDK path as other `/api/v2` analytics mirrors: admin **`POST /api/v2/leadership/*`** → analytics service. The Admin UI uses **`POST /analytics/leadership/*`** (browser session + `analytics-secret` on the admin proxy). Both should return the same data when mirrors are deployed; the UI has no fixed 60s client timeout, so a chart can load while MCP aborts if the backend is slow.
+
+| Report | Why timing differs |
+|--------|---------------------|
+| `leadershipAssistedSelfSolveVolume` / `leadershipUnassistedSelfSolveVolume` | One rollup query each (USSV may add one extra call to resolve `directlyViewSetting`) |
+| `leadershipCostSavingsExplicitDeflection` | **Two** rollup queries in parallel (`deflection-count`) — most likely to exceed the default **60s** SDK timeout |
+
+**Fix timeout errors:** Set `"timeout": 120000` in `creds.json`, `searchunify-timeout:120000` in mcp-remote headers, or `SU_TIMEOUT=120000` for OAuth. For persistent slowness, treat it as an analytics/DB performance issue on the tenant, not an MCP routing bug.
+
+See also: [su-sdk-js README](../su-sdk-js/README.md#leadership-dashboard) (Leadership methods and timeout table).
 
 ---
 
@@ -722,6 +761,9 @@ su-mcp/
 | **Docker Not Found** | Ensure Docker is installed and added to your system's PATH. |
 | **Invalid Credentials** | Double-check values in `creds.json` or HTTP headers. |
 | **Missing API Scopes** | Ensure the client and user have the required search and analytics scopes enabled in your SearchUnify instance. |
+| **`timeout of 60000ms exceeded` on `leadershipCostSavingsExplicitDeflection`** | Increase `timeout` / `searchunify-timeout` (e.g. 120000). Other Leadership reportTypes use the same auth path — if they work, this is usually slow `deflection-count` SQL, not missing credentials. |
+| **Leadership works in Admin but times out in MCP** | Admin browser waits longer; MCP uses SDK default 60s. Raise timeout and/or optimize analytics rollup queries for the tenant. |
+| **Wrong chart / funnel metrics for ASSV** | Use `leadershipAssistedSelfSolveVolume`, not `conversionCaseDeflectionStage1`. |
 | **Connection Refused (HTTP)** | Verify the server is running with `MCP_TRANSPORT=http` and the port matches. |
 | **mcp-remote not found** | Run `npx mcp-remote` (it will be fetched automatically) or install it globally with `npm install -g mcp-remote`. |
 
@@ -765,8 +807,8 @@ su-mcp/
 ### v1.1.0
 - Added `get-search-clients` tool — list all search clients configured in the instance
 - Added `averageClickPosition` report type to analytics tool
-- Added `sessionDetails` and `sessionListTable` report types to analytics tool
-- Added `tileDataContent`, `tileDataMetrics1`, `tileDataMetrics2` tile report types
+- Added `sessionDetails` and `sessionList` report types to analytics tool (SDK route unchanged: session list table API)
+- Added `tileDataContent`; Overview KPI strips use `overviewSessionCount` and `overviewTileDataCount` (`reportType` names; SDK still calls `tileDataMetrics1` / `tileDataMetrics2` routes)
 - Added `sessionId`, `pageNumber`, `startIndex`, `sortByField`, `sortType` parameters to analytics tool
 - Added local Node.js integration guide (Integration 2)
 - Updated `su-sdk` dependency to `2.1.0`
