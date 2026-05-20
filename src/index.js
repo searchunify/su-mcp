@@ -538,6 +538,11 @@ async function runHttp(creds, port) {
     next();
   });
 
+  const healthResponse = () => ({ data: [{ serviceName: "su-mcp", currentStatus: "Operational", version: pkg.version }] });
+
+  app.get("/health", (req, res) => res.json(healthResponse()));
+  app.get("/pollApi", (req, res) => res.json(healthResponse()));
+
   // OpenAI domain verification — serves the challenge token at the well-known URL
   app.get("/.well-known/openai-apps-challenge", (req, res) => {
     const token = process.env.OPENAI_DOMAIN_VERIFICATION_TOKEN;
