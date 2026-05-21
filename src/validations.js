@@ -41,7 +41,6 @@ const validateCreds = () => {
     throw new Error('Invalid parameter: uid or ecoSystemId is required in the config file.');
   }
   if (config.ecoSystemId) {
-    config.ecoSystemId = config.ecoSystemId;
     config.uid = config.uid ?? null;
   }
   const restClientConfig = { ...config, sendMcpConsumptionTrack: true };
@@ -109,6 +108,7 @@ function getCredsFromHeaders(headers) {
     sendMcpConsumptionTrack: true,
   };
   delete restClientConfig.uid;
+  delete restClientConfig.ecoSystemId;
   // instance: platform base URL; su-sdk appends /api/v2/... (SearchUnifyRestClient strips duplicate trailing /api/v2)
   const suRestClient = new SearchUnifyRestClient(restClientConfig);
   return { suRestClient, config: { ...config, uid } };
