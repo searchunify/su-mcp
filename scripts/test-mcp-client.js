@@ -38,7 +38,14 @@ async function runTest() {
     });
     console.log("Spawning server via stdio (cwd: %s)...", projectRoot);
   } else if (transportType === "http") {
-    transport = new StreamableHTTPClientTransport(new URL(httpUrl));
+    // Build optional searchunify-* headers from env vars (for /mcp-api header-based auth)
+    const suHeaders = {};
+    if (process.env.SU_INSTANCE)   suHeaders["searchunify-instance"]    = process.env.SU_INSTANCE;
+    if (process.env.SU_UID)        suHeaders["searchunify-uid"]         = process.env.SU_UID;
+    if (process.env.SU_AUTH_TYPE)  suHeaders["searchunify-auth-type"]   = process.env.SU_AUTH_TYPE;
+    if (process.env.SU_API_KEY)    suHeaders["searchunify-api-key"]     = process.env.SU_API_KEY;
+    const transportOpts = Object.keys(suHeaders).length ? { requestInit: { headers: suHeaders } } : {};
+    transport = new StreamableHTTPClientTransport(new URL(httpUrl), transportOpts);
     console.log("Connecting to HTTP server at %s...", httpUrl);
   } else {
     console.error("Unknown transport: %s. Use 'stdio' or 'http'.", transportType);
