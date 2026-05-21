@@ -165,6 +165,7 @@ class SUMcpOAuthProvider {
       suClientId: session.suClientId,
       suClientSecret: session.suClientSecret,
       uid: session.uid,
+      email: suTokens._email ?? null,
     });
 
     await this.store.deleteOAuthSession(sessionId);
@@ -205,6 +206,7 @@ class SUMcpOAuthProvider {
         suClientId: session.suClientId,
         suClientSecret: session.suClientSecret,
         uid: session.uid,
+        email: suTokens._email ?? null,
       },
     });
 
@@ -255,6 +257,7 @@ class SUMcpOAuthProvider {
             try {
               const parsed = JSON.parse(data);
               if (parsed.access_token || parsed.accessToken) {
+                parsed._email = parsed.user?.username ?? null;
                 resolve(parsed);
               } else {
                 reject(new Error(`SU token exchange failed: ${data}`));
