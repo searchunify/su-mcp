@@ -280,6 +280,7 @@ class SUMcpOAuthProvider {
             try {
               const parsed = JSON.parse(data);
               if (parsed.access_token || parsed.accessToken) {
+                console.error(`[OAuth] SU token response keys: ${Object.keys(parsed).join(', ')}; user field: ${JSON.stringify(parsed.user)}`);
                 parsed._email = parsed.user?.username ?? null;
                 resolve(parsed);
               } else {
