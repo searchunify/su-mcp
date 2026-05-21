@@ -236,6 +236,8 @@ MCP_TRANSPORT=both node src/index.js
 
 The simplest way to get started. When you add the MCP server from Claude's directory, a browser-based form opens automatically to collect your credentials. Authentication is handled via OAuth 2.0 using a proxy flow — the MCP server delegates login to your SearchUnify instance. No API keys or passwords are stored in Claude.
 
+> **Ecosystem UID support:** The connection form accepts both search client UIDs and ecosystem UIDs in the UID field. The server automatically detects which type it is and routes API calls accordingly. If the UID is not found in your SearchUnify instance, a clear error page is shown during login.
+
 > **Self-hosting:** If you are running your own instance of su-mcp (not using `mcp.searchunify.com`), you must also set `OAUTH_ENCRYPTION_KEY` (64-char hex, generate with `openssl rand -hex 32`), `MCP_ISSUER_URL` (public HTTPS URL of your server), and optionally `REDIS_URL` for persistent token storage before starting the server.
 
 **OAuth proxy flow:**
@@ -340,7 +342,8 @@ All header names use the `searchunify-` prefix (lowercase):
 | Header | Required | Description |
 |--------|----------|-------------|
 | `searchunify-instance` | Yes | Your SearchUnify instance URL (e.g. `https://your-instance.searchunify.com`). |
-| `searchunify-uid` | Yes | Search Client UID. |
+| `searchunify-uid` | Yes | Search Client UID. Also used for tenancy routing when `searchunify-ecosystem-id` is set. |
+| `searchunify-ecosystem-id` | No | Ecosystem UUID. When set, analytics and search calls scope to the ecosystem instead of the search client. Pass alongside `searchunify-uid` (both are used). |
 | `searchunify-auth-type` | Yes | Authentication method: `apiKey`, `password`, or `clientCredentials`. |
 | `searchunify-timeout` | No | Per-request SDK timeout in milliseconds. Defaults to `60000`. Use **120000** or higher for `leadershipCostSavingsExplicitDeflection` on large tenants if you see Axios timeout errors. Also set in `creds.json` as `"timeout": 120000` or `SU_TIMEOUT` for OAuth flows. |
 
@@ -497,6 +500,21 @@ Choose one of the following formats based on your authentication method:
   "uid": "<search_client_uid>"
 }
 ```
+
+**Ecosystem UID configuration** (use when your UID is an ecosystem UUID):
+
+```json
+{
+  "instance": "<searchunify_instance_url>",
+  "timeout": 60000,
+  "authType": "apiKey",
+  "apiKey": "<your_api_key>",
+  "uid": "<search_client_or_ecosystem_uid>",
+  "ecoSystemId": "<ecosystem_uid>"
+}
+```
+
+When `ecoSystemId` is present, analytics and search calls automatically scope to the ecosystem. `uid` is still required for tenancy routing. To find the correct UIDs, go to your SearchUnify admin panel → **Search Clients** or **Ecosystems**.
 
 #### Step 2 — Configure Claude Desktop
 

@@ -255,6 +255,9 @@ function conversionPostBase(args, credsForRequest) {
   if (args.ecoSystemId) {
     body.ecoId = args.ecoSystemId;
     body.uid = null;
+  } else if (credsForRequest.config.ecoSystemId) {
+    body.ecoId = credsForRequest.config.ecoSystemId;
+    body.uid = null;
   } else {
     body.uid = resolvedSearchClientUid(args, credsForRequest);
     body.ecoId = null;
@@ -282,6 +285,9 @@ function leadershipUidEcoBody(args, credsForRequest) {
   const base = { internalUser, ...leadershipLastSixQuartersWindow() };
   if (args.ecoSystemId) {
     return { ...base, ecoId: args.ecoSystemId };
+  }
+  if (credsForRequest.config.ecoSystemId) {
+    return { ...base, ecoId: credsForRequest.config.ecoSystemId };
   }
   return { ...base, uid: resolvedSearchClientUid(args, credsForRequest) };
 }
@@ -374,6 +380,9 @@ function scopeParamsForSimilarValidationOverview(args, credsForRequest) {
   if (ecoSystemId) {
     return { ...base, ecoSystemId };
   }
+  if (credsForRequest.config.ecoSystemId) {
+    return { ...base, ecoSystemId: credsForRequest.config.ecoSystemId };
+  }
   return { ...base, searchClientId: resolvedSearchClientUid(args, credsForRequest) };
 }
 
@@ -389,6 +398,9 @@ function scopeParamsForOverview(args, credsForRequest) {
   };
   if (ecoSystemId) {
     return { ...base, ecoSystemId };
+  }
+  if (credsForRequest.config.ecoSystemId) {
+    return { ...base, ecoSystemId: credsForRequest.config.ecoSystemId };
   }
   return { ...base, searchClientId: resolvedSearchClientUid(args, credsForRequest) };
 }
@@ -1022,11 +1034,14 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         }
         case reportTypes.overviewSessionCount: {
           console.error("overviewSessionCount triggered");
-          const tileParams = {
-            searchClientId: resolvedSearchClientUid(args, credsForRequest),
-            startDate,
-            endDate,
-          };
+          const tileParams = { startDate, endDate };
+          if (args.ecoSystemId) {
+            tileParams.ecoSystemId = args.ecoSystemId;
+          } else if (credsForRequest.config.ecoSystemId) {
+            tileParams.ecoSystemId = credsForRequest.config.ecoSystemId;
+          } else {
+            tileParams.searchClientId = resolvedSearchClientUid(args, credsForRequest);
+          }
           analyticsResponse = await Analytics.getTileDataMetrics1(tileParams);
           {
             const d = analyticsResponse?.data;
@@ -1144,6 +1159,8 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         }
         case reportTypes.llmResponseFeedback: {
           console.error("llmResponseFeedback triggered");
+          const llmUid = resolvedSearchClientUid(args, credsForRequest);
+          if (!llmUid) return { content: [{ type: "text", text: "This report requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
           analyticsResponse = await Analytics.getLlmResponseFeedback(
             paramsForLlmResponseFeedback(args, credsForRequest)
           );
@@ -1229,16 +1246,20 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         }
         case reportTypes.conversionCurrentRelevanceIndex: {
           console.error("conversionCurrentRelevanceIndex triggered");
+          const criUid = resolvedSearchClientUid(args, credsForRequest);
+          if (!criUid) return { content: [{ type: "text", text: "This report requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
           analyticsResponse = await Analytics.postCurrentRelevanceIndex({
-            uid: resolvedSearchClientUid(args, credsForRequest),
+            uid: criUid,
             internalUser: internalUser ?? "all",
           });
           break;
         }
         case reportTypes.conversionRelevanceIndex: {
           console.error("conversionRelevanceIndex triggered");
+          const riUid = resolvedSearchClientUid(args, credsForRequest);
+          if (!riUid) return { content: [{ type: "text", text: "This report requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
           analyticsResponse = await Analytics.postRelevanceIndex({
-            uid: resolvedSearchClientUid(args, credsForRequest),
+            uid: riUid,
             internalUser: internalUser ?? "all",
             from: startDate,
             to: endDate,

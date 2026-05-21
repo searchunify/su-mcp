@@ -37,11 +37,16 @@ const validateCreds = () => {
   console.error ('Validating creds...');
   const credsPath = path.join(__dirname, 'input', 'creds.json');
   const config = validateAndLoadJSON(credsPath);
-  if(!config.uid){
-    throw new Error('Invalid parameter: uid is required in the config file.');
+  if(!config.uid && !config.ecoSystemId){
+    throw new Error('Invalid parameter: uid or ecoSystemId is required in the config file.');
+  }
+  if (config.ecoSystemId) {
+    config.ecoSystemId = config.ecoSystemId;
+    config.uid = config.uid ?? null;
   }
   const restClientConfig = { ...config, sendMcpConsumptionTrack: true };
   delete restClientConfig.uid;
+  delete restClientConfig.ecoSystemId;
   // instance: platform base URL (e.g. https://host); su-sdk appends /api/v2/... from ANALYTICS.* — duplicate /api/v2 on instance is normalized away in SearchUnifyRestClient
   const suRestClient = new SearchUnifyRestClient(restClientConfig);
   console.error ('created sdk connection...');
@@ -66,12 +71,16 @@ function getCredsFromHeaders(headers) {
   const authType = (get('auth-type') || 'apiKey').toLowerCase();
   const timeout = parseInt(get('timeout') || '60000', 10);
 
+  const ecosystemId = get('ecosystem-id')?.trim();
   const config = {
     instance,
     uid,
     timeout: Number.isFinite(timeout) ? timeout : 60000,
     authType: authType === 'apikey' ? 'apiKey' : authType === 'clientcredentials' ? 'clientCredentials' : authType,
   };
+  if (ecosystemId) {
+    config.ecoSystemId = ecosystemId;
+  }
 
   if (config.authType === 'apiKey') {
     const apiKey = get('api-key');
@@ -113,7 +122,7 @@ function getCredsFromHeaders(headers) {
  * @param {Object} suTokens - { accessToken, refreshToken, instanceUrl }
  */
 function buildCredsFromSuToken(suTokens) {
-  const { instanceUrl, suClientId, suClientSecret, uid, email } = suTokens;
+  const { instanceUrl, suClientId, suClientSecret, uid, email, isEcosystem } = suTokens;
   const suRestClient = new SearchUnifyRestClient({
     instance: instanceUrl,
     timeout: parseInt(process.env.SU_TIMEOUT || "60000", 10),
@@ -123,7 +132,15 @@ function buildCredsFromSuToken(suTokens) {
       clientSecret: suClientSecret,
     },
   });
-  return { suRestClient, config: { instance: instanceUrl, uid, email: email ?? null } };
+  const config = { instance: instanceUrl, email: email ?? null };
+  if (isEcosystem === true) {
+    config.ecoSystemId = uid;
+    config.uid = null;
+  } else {
+    config.uid = uid;
+    config.ecoSystemId = null;
+  }
+  return { suRestClient, config };
 }
 
 export { validateCreds, getCredsFromHeaders, buildCredsFromSuToken };

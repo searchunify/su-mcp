@@ -158,14 +158,24 @@ class SUMcpOAuthProvider {
       session.instanceUrl, suAuthCode, session.suClientId, session.suClientSecret
     );
 
+    const rawAccessToken = suTokens.access_token || suTokens.accessToken;
+    const uidType = await this._detectUidType(session.instanceUrl, rawAccessToken, session.uid);
+    if (uidType === 'unknown') {
+      const err = new Error(`"${session.uid}" was not found as a search client or ecosystem in this SearchUnify instance. Please check the UID and try again.`);
+      err.code = 'INVALID_UID';
+      throw err;
+    }
+    const isEcosystem = uidType === 'ecosystem';
+
     await this.store.saveToolSession(session.mcpSessionId, {
-      accessToken: suTokens.access_token || suTokens.accessToken,
+      accessToken: rawAccessToken,
       refreshToken: suTokens.refresh_token || suTokens.refreshToken,
       instanceUrl: session.instanceUrl,
       suClientId: session.suClientId,
       suClientSecret: session.suClientSecret,
       uid: session.uid,
       email: suTokens._email ?? null,
+      isEcosystem,
     });
 
     await this.store.deleteOAuthSession(sessionId);
@@ -193,6 +203,15 @@ class SUMcpOAuthProvider {
     }
     console.error(`[OAuth] su-callback — login completed for: ${session.instanceUrl}`);
 
+    const rawAccessToken = suTokens.access_token || suTokens.accessToken;
+    const uidType = await this._detectUidType(session.instanceUrl, rawAccessToken, session.uid);
+    if (uidType === 'unknown') {
+      const err = new Error(`"${session.uid}" was not found as a search client or ecosystem in this SearchUnify instance. Please check the UID and try again.`);
+      err.code = 'INVALID_UID';
+      throw err;
+    }
+    const isEcosystem = uidType === 'ecosystem';
+
     const mcpAuthCode = generateToken();
     await this.store.saveAuthCode(mcpAuthCode, {
       clientId: session.clientId,
@@ -200,13 +219,14 @@ class SUMcpOAuthProvider {
       codeChallenge: session.codeChallenge,
       scopes: session.scopes || [],
       suTokens: {
-        accessToken: suTokens.access_token || suTokens.accessToken,
+        accessToken: rawAccessToken,
         refreshToken: suTokens.refresh_token || suTokens.refreshToken,
         instanceUrl: session.instanceUrl,
         suClientId: session.suClientId,
         suClientSecret: session.suClientSecret,
         uid: session.uid,
         email: suTokens._email ?? null,
+        isEcosystem,
       },
     });
 
@@ -272,6 +292,50 @@ class SUMcpOAuthProvider {
       req.setTimeout(10000, () => { req.destroy(new Error("SU token exchange timed out")); });
       req.write(body);
       req.end();
+    });
+  }
+
+  /**
+   * Detects whether a uid belongs to a search_client or ecosystem by calling /api/v2/search-clients.
+   * Returns 'ecosystem' | 'search_client' | 'unknown' (uid not in list) | 'error' (network/timeout).
+   * 'unknown' → fail auth; 'error' → fail-open (treat as search_client).
+   */
+  async _detectUidType(instanceUrl, accessToken, uid) {
+    const url = `${instanceUrl}/api/v2/search-clients`;
+    return new Promise((resolve) => {
+      try {
+        const u = new URL(url);
+        const transport = u.protocol === "https:" ? https : http;
+        const req = transport.request(
+          {
+            method: "GET",
+            hostname: u.hostname,
+            port: u.port,
+            path: u.pathname,
+            headers: { Authorization: `Bearer ${accessToken}` },
+          },
+          (res) => {
+            let data = "";
+            res.on("data", (chunk) => (data += chunk));
+            res.on("end", () => {
+              try {
+                const list = JSON.parse(data);
+                if (!Array.isArray(list)) { resolve('error'); return; }
+                const match = list.find((item) => item.uid === uid);
+                if (!match) { resolve('unknown'); return; }
+                resolve(match.type === 'ecosystem' ? 'ecosystem' : 'search_client');
+              } catch {
+                resolve('error');
+              }
+            });
+          }
+        );
+        req.on("error", () => resolve('error'));
+        req.setTimeout(10000, () => { req.destroy(); resolve('error'); });
+        req.end();
+      } catch {
+        resolve('error');
+      }
     });
   }
 

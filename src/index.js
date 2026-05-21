@@ -76,6 +76,19 @@ h1{color:#16a34a;font-size:20px;margin-bottom:12px}p{color:#555;font-size:14px;l
 <p>You have been connected to SearchUnify.<br>Return to Claude and continue your conversation.</p></div>${redirect}</body></html>`;
 }
 
+function loginErrorHTML(message, nonce) {
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Configuration Error</title>
+<style nonce="${nonce}">body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f5f7fa;margin:0}
+.card{background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.08);padding:40px;max-width:480px;text-align:center}
+h1{color:#dc2626;font-size:20px;margin-bottom:12px}p{color:#555;font-size:14px;line-height:1.6}
+.hint{margin-top:16px;padding:12px;background:#fef2f2;border-radius:8px;font-size:13px;color:#b91c1c}</style></head>
+<body><div class="card"><h1>&#10060; Invalid Configuration</h1>
+<p>${message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+<div class="hint">To find the correct UID, go to your SearchUnify admin panel &rarr; <strong>Search Clients</strong> (for a search client UID) or <strong>Ecosystems</strong> (for an ecosystem UID), then reconnect.</div>
+</div></body></html>`;
+}
+
 async function validateAuthorizeBody(body, store) {
   const { session, instance, uid, su_client_id, su_client_secret } = body;
   if (!session || !instance || !uid || !su_client_id || !su_client_secret) {
@@ -284,7 +297,11 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
       res.redirect(302, redirectUrl);
     } catch (err) {
       console.error("[OAuth] SU callback error:", err.message);
-      // Don't leak internal error details to the user
+      if (err.code === 'INVALID_UID') {
+        const nonce = generateNonce();
+        res.set("Content-Security-Policy", `default-src 'none'; style-src 'nonce-${nonce}'; frame-ancestors 'none'`);
+        return res.status(400).type("html").send(loginErrorHTML(err.message, nonce));
+      }
       res.status(400).send("Authorization failed. Please try again.");
     }
   });

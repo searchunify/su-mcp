@@ -19,20 +19,22 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     pageSize: z.number().int().min(1).max(100).optional().describe("number of results per page, default is 10"),
     sortBy: z.enum(["_score", "post_time"]).optional().describe("field to sort results by, e.g. _score or post_time"),
     versionResults: z.boolean().default(false).optional().describe("Whether to use versioning for results. Defaults to false."),
+    uid: z.string().uuid().optional().describe("Optional search client UUID override. Required for ecosystem-only configs."),
     // sortOrder: z.enum(["asc", "desc"]).optional().describe("sort order for results, asc or desc"),
-  }, searchToolAnnotations, async ({ searchString, aggregations, page, pageSize, sortBy, versionResults }) => {
+  }, searchToolAnnotations, async ({ searchString, aggregations, page, pageSize, sortBy, versionResults, uid }) => {
     const c = await credsForRequest();
     if (!c) return { content: [{ type: "text", text: "Not authenticated. Please call the login tool first." }] };
+    const effectiveUid = uid?.trim() || c.config.uid;
+    if (!effectiveUid) {
+      return { content: [{ type: "text", text: "Search requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
+    }
     const Search = c.suRestClient.Search();
-    //const requestParams = { uid: c.config.uid, searchString };
-    
     const effectivePage = page ?? 1;
     const effectivePageSize = pageSize ?? 10;
     const from = (effectivePage - 1) * effectivePageSize;
 
-
     const requestParams = {
-      uid: c.config.uid,
+      uid: effectiveUid,
       searchString,
       from,
       resultsPerPage: effectivePageSize,
@@ -86,13 +88,18 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     {
       searchString: z.string().min(3).max(100).describe("search query, a single word or sentence"),
       aggregations: z.array(aggregationSchema).optional().describe("optional list of current filters to get filter options in context of filtered results"),
+      uid: z.string().uuid().optional().describe("Optional search client UUID override. Required for ecosystem-only configs."),
     },
     getFilterOptionsToolAnnotations,
-    async ({ searchString, aggregations }) => {
+    async ({ searchString, aggregations, uid }) => {
       const c = await credsForRequest();
       if (!c) return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
+      const effectiveUid = uid?.trim() || c.config.uid;
+      if (!effectiveUid) {
+        return { content: [{ type: "text", text: "Search requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
+      }
       const Search = c.suRestClient.Search();
-      const requestParams = { uid: c.config.uid, searchString, ...(c.config.email ? { email: c.config.email } : {}) };
+      const requestParams = { uid: effectiveUid, searchString, ...(c.config.email ? { email: c.config.email } : {}) };
       if (aggregations?.length) {
         requestParams.aggregations = aggregations.map((a) => ({ type: a.type, filter: [a.filter] }));
       }
