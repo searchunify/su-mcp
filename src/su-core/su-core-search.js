@@ -19,8 +19,9 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     pageSize: z.number().int().min(1).max(100).optional().describe("number of results per page, default is 10"),
     sortBy: z.enum(["_score", "post_time"]).optional().describe("field to sort results by, e.g. _score or post_time"),
     versionResults: z.boolean().default(false).optional().describe("Whether to use versioning for results. Defaults to false."),
+    uid: z.string().uuid().optional().describe("Optional search client UUID override. Omit to use the uid from MCP auth."),
     // sortOrder: z.enum(["asc", "desc"]).optional().describe("sort order for results, asc or desc"),
-  }, searchToolAnnotations, async ({ searchString, aggregations, page, pageSize, sortBy, versionResults }) => {
+  }, searchToolAnnotations, async ({ searchString, aggregations, page, pageSize, sortBy, versionResults, uid }) => {
     const c = await credsForRequest();
     if (!c) return { content: [{ type: "text", text: "Not authenticated. Please call the login tool first." }] };
     const Search = c.suRestClient.Search();
@@ -32,7 +33,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
 
 
     const requestParams = {
-      uid: c.config.uid,
+      uid: (uid?.trim()) || c.config.uid,
       searchString,
       from,
       resultsPerPage: effectivePageSize,
@@ -85,13 +86,14 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     {
       searchString: z.string().min(3).max(100).describe("search query, a single word or sentence"),
       aggregations: z.array(aggregationSchema).optional().describe("optional list of current filters to get filter options in context of filtered results"),
+      uid: z.string().uuid().optional().describe("Optional search client UUID override. Omit to use the uid from MCP auth."),
     },
     getFilterOptionsToolAnnotations,
-    async ({ searchString, aggregations }) => {
+    async ({ searchString, aggregations, uid }) => {
       const c = await credsForRequest();
       if (!c) return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
       const Search = c.suRestClient.Search();
-      const requestParams = { uid: c.config.uid, searchString };
+      const requestParams = { uid: (uid?.trim()) || c.config.uid, searchString };
       if (aggregations?.length) {
         requestParams.aggregations = aggregations.map((a) => ({ type: a.type, filter: [a.filter] }));
       }
