@@ -48,6 +48,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       requestParams.aggregations = aggregations.map((a) => ({ type: a.type, filter: [a.filter] }));
     }
 
+    console.error(`[Search] query: "${searchString}" uid: ${effectiveUid} email: ${c.config.email ?? '(none)'}`);
     const searchResponse = await Search.getSearchResults(requestParams);
 
     if(!searchResponse?.data){
