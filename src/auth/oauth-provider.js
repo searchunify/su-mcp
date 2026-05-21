@@ -319,7 +319,8 @@ class SUMcpOAuthProvider {
             res.on("data", (chunk) => (data += chunk));
             res.on("end", () => {
               try {
-                const list = JSON.parse(data);
+                const parsed = JSON.parse(data);
+                const list = Array.isArray(parsed) ? parsed : parsed?.data;
                 if (!Array.isArray(list)) { resolve('error'); return; }
                 const match = list.find((item) => item.uid === uid);
                 if (!match) { resolve('unknown'); return; }
