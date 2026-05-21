@@ -1443,6 +1443,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
       }
 
       if (analyticsResponse?.status === false) {
+        console.error(`[Analytics] API error — reportType: ${reportType}, message: ${analyticsResponse.message}`);
         return jsonTextResult({
           error: analyticsResponse.message || "analytics_request_failed",
           reportType,
@@ -1450,6 +1451,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         });
       }
       if (analyticsResponse?.data === undefined || analyticsResponse?.data === null) {
+        console.error(`[Analytics] empty response — reportType: ${reportType}`);
         return {
           content: [
             {

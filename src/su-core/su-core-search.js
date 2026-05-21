@@ -53,6 +53,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     const searchResponse = await Search.getSearchResults(requestParams);
 
     if(!searchResponse?.data){
+      console.error(`[Search] API error — query: "${searchString}", response: ${JSON.stringify(searchResponse)}`);
       return {
         type: 'text',
         json: 'some error occured while searching, response is empty'
