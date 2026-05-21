@@ -38,7 +38,8 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       resultsPerPage: effectivePageSize,
       versionResults: !!versionResults,
       ...(sortBy ? { sortby: sortBy } : {}),
-      orderBy: 'desc'
+      orderBy: 'desc',
+      ...(c.config.email ? { email: c.config.email } : {}),
    };
     
     if (aggregations?.length) {
@@ -91,7 +92,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       const c = await credsForRequest();
       if (!c) return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
       const Search = c.suRestClient.Search();
-      const requestParams = { uid: c.config.uid, searchString };
+      const requestParams = { uid: c.config.uid, searchString, ...(c.config.email ? { email: c.config.email } : {}) };
       if (aggregations?.length) {
         requestParams.aggregations = aggregations.map((a) => ({ type: a.type, filter: [a.filter] }));
       }

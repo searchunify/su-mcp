@@ -113,7 +113,7 @@ function getCredsFromHeaders(headers) {
  * @param {Object} suTokens - { accessToken, refreshToken, instanceUrl }
  */
 function buildCredsFromSuToken(suTokens) {
-  const { instanceUrl, suClientId, suClientSecret, uid } = suTokens;
+  const { instanceUrl, suClientId, suClientSecret, uid, email } = suTokens;
   const suRestClient = new SearchUnifyRestClient({
     instance: instanceUrl,
     timeout: parseInt(process.env.SU_TIMEOUT || "60000", 10),
@@ -123,7 +123,7 @@ function buildCredsFromSuToken(suTokens) {
       clientSecret: suClientSecret,
     },
   });
-  return { suRestClient, config: { instance: instanceUrl, uid } };
+  return { suRestClient, config: { instance: instanceUrl, uid, email: email ?? null } };
 }
 
 export { validateCreds, getCredsFromHeaders, buildCredsFromSuToken };
