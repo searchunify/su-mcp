@@ -244,6 +244,12 @@ function resolvedSearchClientUid(args, credsForRequest) {
   return credsForRequest.config.uid;
 }
 
+function searchClientScope(args, credsForRequest) {
+  if (args.ecoSystemId) return { ecoSystemId: args.ecoSystemId };
+  if (credsForRequest.config.ecoSystemId) return { ecoSystemId: credsForRequest.config.ecoSystemId };
+  return { searchClientId: resolvedSearchClientUid(args, credsForRequest) };
+}
+
 /** Core POST /api/v2/conversion/* body: from/to, internalUser, uid or ecoId. MCP does not add `tenantId`; admin/BFF adds it when proxying to analytics. */
 function conversionPostBase(args, credsForRequest) {
   const internalUser = args.internalUser ?? "all";
@@ -797,67 +803,45 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         case reportTypes.searchQueryWithNoClicks: {
           console.error("searchQueryWithNoClicks triggered");
           analyticsResponse = await Analytics.searchQueryWithNoClicks({
-            searchClientId: resolvedSearchClientUid(args, credsForRequest),
-            startDate,
-            endDate,
-            count,
-            pageNumber,
-            sortByField,
-            sortType,
+            ...searchClientScope(args, credsForRequest),
+            startDate, endDate, count, pageNumber, sortByField, sortType,
           });
           break;
         }
         case reportTypes.searchQueryWithResult: {
           console.error("searchQueryWithResult triggered");
           analyticsResponse = await Analytics.searchQueryWithResult({
-            searchClientId: resolvedSearchClientUid(args, credsForRequest),
-            startDate,
-            endDate,
-            count,
-            pageNumber,
-            sortByField,
-            sortType,
+            ...searchClientScope(args, credsForRequest),
+            startDate, endDate, count, pageNumber, sortByField, sortType,
           });
           break;
         }
         case reportTypes.searchQueryWithoutResults: {
           console.error("searchQueryWithoutResults triggered");
           analyticsResponse = await Analytics.searchQueryWithoutResults({
-            searchClientId: resolvedSearchClientUid(args, credsForRequest),
-            startDate,
-            endDate,
-            count,
-            pageNumber,
-            sortByField,
-            sortType,
+            ...searchClientScope(args, credsForRequest),
+            startDate, endDate, count, pageNumber, sortByField, sortType,
           });
           break;
         }
         case reportTypes.getAllSearchQuery: {
           console.error("getAllSearchQuery triggered");
           analyticsResponse = await Analytics.getAllSearchQuery({
-            searchClientId: resolvedSearchClientUid(args, credsForRequest),
-            startDate,
-            endDate,
-            count,
-            pageNumber,
-            sortByField,
-            sortType,
+            ...searchClientScope(args, credsForRequest),
+            startDate, endDate, count, pageNumber, sortByField, sortType,
           });
           break;
         }
         case reportTypes.getAllSearchConversion: {
           console.error("getAllSearchConversion triggered");
-          analyticsResponse = await Analytics.getAllSearchConversion({ searchClientId: resolvedSearchClientUid(args, credsForRequest), startDate, endDate, count });
+          analyticsResponse = await Analytics.getAllSearchConversion({ ...searchClientScope(args, credsForRequest), startDate, endDate, count });
           break;
         }
         case reportTypes.averageClickPosition: {
           console.error("averageClickPosition triggered");
           analyticsResponse = await Analytics.getAverageClickPosition({
-            searchClientId: resolvedSearchClientUid(args, credsForRequest),
-            startDate,
-            endDate,
-            internalUser: "all",
+            ...searchClientScope(args, credsForRequest),
+            startDate, endDate, internalUser: "all",
           });
           break;
         }
@@ -1059,12 +1043,12 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         }
         case reportTypes.overviewTileDataCount: {
           console.error("overviewTileDataCount triggered");
-          const tileParams = {
-            searchClientId: resolvedSearchClientUid(args, credsForRequest),
-            startDate,
-            endDate,
-          };
-          analyticsResponse = await Analytics.getTileDataMetrics2(tileParams);
+          const tileScope = args.ecoSystemId
+            ? { ecoSystemId: args.ecoSystemId }
+            : credsForRequest.config.ecoSystemId
+              ? { ecoSystemId: credsForRequest.config.ecoSystemId }
+              : { searchClientId: resolvedSearchClientUid(args, credsForRequest) };
+          analyticsResponse = await Analytics.getTileDataMetrics2({ ...tileScope, startDate, endDate });
           break;
         }
         case reportTypes.overviewTopSearches: {
@@ -1299,10 +1283,11 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         }
         case reportTypes.conversionAttachedArticles: {
           console.error("conversionAttachedArticles triggered");
+          const attachedUid = resolvedSearchClientUid(args, credsForRequest);
+          if (!attachedUid) return { content: [{ type: "text", text: "This report requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
           analyticsResponse = await Analytics.getAttachedArticles({
-            startDate,
-            endDate,
-            searchClientId: resolvedSearchClientUid(args, credsForRequest),
+            startDate, endDate,
+            searchClientId: attachedUid,
             ecoSystemId: args.ecoSystemId,
             count: conversionDetailLimit ?? count ?? 100,
             offset: conversionArticleOffset ?? conversionDetailOffset ?? 1,
@@ -1315,10 +1300,11 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         }
         case reportTypes.conversionArticlesCreatedCases: {
           console.error("conversionArticlesCreatedCases triggered");
+          const createdUid = resolvedSearchClientUid(args, credsForRequest);
+          if (!createdUid) return { content: [{ type: "text", text: "This report requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
           analyticsResponse = await Analytics.getCaseCreatedArticles({
-            startDate,
-            endDate,
-            searchClientId: resolvedSearchClientUid(args, credsForRequest),
+            startDate, endDate,
+            searchClientId: createdUid,
             ecoSystemId: args.ecoSystemId,
             searchType: conversionSearchTypeArticle ?? "all",
             count: conversionDetailLimit ?? count ?? 100,
@@ -1332,10 +1318,11 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         }
         case reportTypes.conversionArticlesDeflectedCase: {
           console.error("conversionArticlesDeflectedCase triggered");
+          const deflectedUid = resolvedSearchClientUid(args, credsForRequest);
+          if (!deflectedUid) return { content: [{ type: "text", text: "This report requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
           analyticsResponse = await Analytics.getCaseDeflectedArticles({
-            startDate,
-            endDate,
-            searchClientId: resolvedSearchClientUid(args, credsForRequest),
+            startDate, endDate,
+            searchClientId: deflectedUid,
             ecoSystemId: args.ecoSystemId,
             searchType: conversionSearchTypeArticle ?? "all",
             count: conversionDetailLimit ?? count ?? 100,
