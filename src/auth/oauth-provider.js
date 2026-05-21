@@ -9,6 +9,8 @@ function generateToken() {
   return crypto.randomBytes(32).toString("hex");
 }
 
+const maskEmail = (e) => e ? `${e[0]}****@${e.split('@')[1]}` : '(none)';
+
 
 /**
  * OAuth clients store backed by Redis.
@@ -178,6 +180,7 @@ class SUMcpOAuthProvider {
       isEcosystem,
     });
 
+    console.error(`[OAuth] su-callback (tool) — login completed for: ${session.instanceUrl} user: ${maskEmail(suTokens._email)}`);
     await this.store.deleteOAuthSession(sessionId);
     return true;
   }
@@ -201,7 +204,7 @@ class SUMcpOAuthProvider {
       console.error(`[OAuth] su-callback — SU token exchange failed: ${err.message}`);
       throw err;
     }
-    console.error(`[OAuth] su-callback — login completed for: ${session.instanceUrl}`);
+    console.error(`[OAuth] su-callback — login completed for: ${session.instanceUrl} user: ${maskEmail(suTokens._email)}`);
 
     const rawAccessToken = suTokens.access_token || suTokens.accessToken;
     const uidType = await this._detectUidType(session.instanceUrl, rawAccessToken, session.uid);
