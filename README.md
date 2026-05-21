@@ -745,6 +745,62 @@ npm test
 
 Runs validation and module import tests for all tools.
 
+### Integration 6: `/mcp-api` — Shared Credentials (No Per-User Login)
+
+Use this integration when **all users should share the same identity** — for example, a Microsoft Copilot / Power Platform connector where an admin configures credentials once and every user benefits automatically with no login prompt.
+
+```
+Admin configures connector once with searchunify-* headers
+        ↓
+All users connect via the Copilot agent
+        ↓
+MCP works immediately — no form, no browser redirect, no per-user auth
+```
+
+**When to use vs `/mcp` (OAuth):**
+
+| | `/mcp` OAuth | `/mcp-api` Header Auth |
+|--|-------------|------------------------|
+| Per-user identity | Yes — each user has their own SU token | No — all users share one identity |
+| Personalized results | Yes (if SU supports it) | No |
+| Setup | Each user logs in once | Admin configures once |
+| Best for | Claude, Claude Desktop | Copilot, Power Platform, server-to-server |
+
+#### Microsoft Copilot / Power Platform Setup
+
+In your custom connector definition, add these static headers (configured once by the admin):
+
+| Header | Value |
+|--------|-------|
+| `searchunify-instance` | `https://your-instance.searchunify.com` |
+| `searchunify-uid` | Your Search Client UID |
+| `searchunify-auth-type` | `apiKey` |
+| `searchunify-api-key` | Your API key |
+
+MCP endpoint URL: `https://mcp.searchunify.com/mcp-api`
+
+#### Claude Desktop / mcp-remote Setup
+
+```json
+{
+  "mcpServers": {
+    "su-mcp": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.searchunify.com/mcp-api",
+        "--header", "searchunify-instance:https://your-instance.searchunify.com",
+        "--header", "searchunify-uid:<search_client_uid>",
+        "--header", "searchunify-auth-type:apiKey",
+        "--header", "searchunify-api-key:<your_api_key>"
+      ]
+    }
+  }
+}
+```
+
+> The same header reference from [Integration 2](#integration-2-mcp-remote--remote-http-with-header-auth) applies — all `searchunify-*` headers are supported including `searchunify-ecosystem-id` and `searchunify-timeout`.
+
 ---
 
 ## Project Structure

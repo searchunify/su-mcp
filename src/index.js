@@ -474,6 +474,33 @@ function setupNonOAuthMcpRoutes(app, creds, mcpRateLimit) {
     }
   });
 
+  // /mcp-api — header-based auth, always available regardless of OAuth mode.
+  // Intended for shared/service-account setups (e.g. Microsoft Copilot / Power Platform connectors)
+  // where an admin configures credentials once and all users share them via request headers.
+  // Use apiKey auth: searchunify-auth-type: apiKey + searchunify-api-key: <key>
+  app.options("/mcp-api", (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, mcp-session-id, Accept, searchunify-instance, searchunify-uid, searchunify-auth-type, searchunify-api-key, searchunify-oauth-client-id, searchunify-oauth-client-secret, searchunify-timeout, searchunify-ecosystem-id");
+    res.set("Access-Control-Expose-Headers", "mcp-session-id");
+    res.status(204).end();
+  });
+
+  app.all("/mcp-api", mcpRateLimit, express.json(), async (req, res) => {
+    const ts = new Date().toISOString();
+    console.error(`[MCP HTTP] ${ts} ${req.method} /mcp-api (api-key)`);
+    try {
+      const requestCreds = getCredsFromHeaders(req.headers || {});
+      if (!requestCreds) {
+        return res.status(401).json({ error: "unauthorized", error_description: "Missing or incomplete searchunify-* headers" });
+      }
+      await serveStatelessMcpRequest(req, res, requestCreds);
+    } catch (err) {
+      console.error(`[MCP] mcp-api handler error: ${err.message}`);
+      if (!res.headersSent) res.status(500).json({ error: "server_error", error_description: "An internal error occurred." });
+    }
+  });
+
   // Legacy root endpoint for backward compatibility
   app.all("/", mcpRateLimit, express.json(), async (req, res) => {
     const ts = new Date().toISOString();
