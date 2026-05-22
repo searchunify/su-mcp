@@ -101,6 +101,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       if (!effectiveUid) {
         return { content: [{ type: "text", text: "Search requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
       }
+      console.error(`[FilterOptions] query: "${searchString}" uid: ${effectiveUid}`);
       const Search = c.suRestClient.Search();
       const requestParams = { uid: effectiveUid, searchString, ...(c.config.email ? { email: c.config.email } : {}) };
       if (aggregations?.length) {

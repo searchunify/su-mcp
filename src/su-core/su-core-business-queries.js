@@ -823,6 +823,7 @@ export const initializeExecutiveBusinessQueryTools = async ({
     async (args) => {
       const credsForRequest = await Promise.resolve(c());
       const { recipeId, ...input } = args;
+      console.error(`[ExecutiveQuery] recipeId: ${recipeId}`);
       try {
         let payload;
         switch (recipeId) {

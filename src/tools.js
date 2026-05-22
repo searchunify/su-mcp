@@ -14,6 +14,7 @@ export const initializeTools = async ({ server, creds, getCreds, mcpSessionId, o
       {},
       loginToolAnnotations,
       async () => {
+        console.error(`[Login] login tool called — session: ${mcpSessionId.slice(0, 8)}...`);
         const loginUrl = `${base}/mcp-connect/login?s=${encodeURIComponent(mcpSessionId)}`;
         return {
           content: [{

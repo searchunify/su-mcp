@@ -12,6 +12,7 @@ const initializeSearchClientsTools = async ({ server, creds, getCreds }) => {
     async () => {
       const c = await credsForRequest();
       if (!c) return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
+      console.error(`[SearchClients] fetching search clients`);
       const SearchClients = c.suRestClient.SearchClients();
       const response = await SearchClients.getSearchClients();
 
