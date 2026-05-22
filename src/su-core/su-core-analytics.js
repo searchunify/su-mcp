@@ -801,6 +801,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
       }
 
       let analyticsResponse = {};
+      try {
       switch (reportType) {
         case reportTypes.searchQueryWithNoClicks: {
           log("searchQueryWithNoClicks triggered");
@@ -1442,6 +1443,10 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         }
         default:
           log("invalid reportType ", reportType);
+      }
+      } catch (e) {
+        log(`[Analytics] SDK error — reportType: ${reportType}, message: ${e?.message ?? String(e)}`);
+        return jsonTextResult({ error: e?.message ?? String(e), reportType });
       }
 
       if (analyticsResponse?.status === false) {
