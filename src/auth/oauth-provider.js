@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import http from "node:http";
 import https from "node:https";
+import { log } from "../logger.js";
 import { createStore, ACCESS_TOKEN_TTL, REFRESH_TOKEN_TTL } from "./store.js";
 import { getInstanceFormHTML } from "./config-form.js";
 import { InvalidTokenError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
@@ -73,7 +74,7 @@ class SUMcpOAuthProvider {
    * which redirects to SU's login.
    */
   async authorize(client, params, res) {
-    console.error(`[OAuth] authorize — showing connection form`);
+    log(`[OAuth] authorize — showing connection form`);
     const sessionId = generateToken();
     await this.store.saveOAuthSession(sessionId, {
       clientId: client.client_id,
@@ -119,7 +120,7 @@ class SUMcpOAuthProvider {
    * @param {string} uid - Search Client UID (used in search/analytics API calls)
    */
   async handleAuthorizeStart(sessionId, instanceUrl, suClientId, suClientSecret, uid) {
-    console.error(`[OAuth] authorize/start — redirecting to SU login: ${instanceUrl}`);
+    log(`[OAuth] authorize/start — redirecting to SU login: ${instanceUrl}`);
     return this._handleAuthorizeStartInternal(sessionId, instanceUrl, suClientId, suClientSecret, uid);
   }
 
@@ -180,7 +181,7 @@ class SUMcpOAuthProvider {
       isEcosystem,
     });
 
-    console.error(`[OAuth] su-callback (tool) — login completed for: ${session.instanceUrl} user: ${maskEmail(suTokens._email)}`);
+    log(`[OAuth] su-callback (tool) — login completed for: ${session.instanceUrl} user: ${maskEmail(suTokens._email)}`);
     await this.store.deleteOAuthSession(sessionId);
     return true;
   }
@@ -201,10 +202,10 @@ class SUMcpOAuthProvider {
         session.instanceUrl, suAuthCode, session.suClientId, session.suClientSecret
       );
     } catch (err) {
-      console.error(`[OAuth] su-callback — SU token exchange failed: ${err.message}`);
+      log(`[OAuth] su-callback — SU token exchange failed: ${err.message}`);
       throw err;
     }
-    console.error(`[OAuth] su-callback — login completed for: ${session.instanceUrl} user: ${maskEmail(suTokens._email)}`);
+    log(`[OAuth] su-callback — login completed for: ${session.instanceUrl} user: ${maskEmail(suTokens._email)}`);
 
     const rawAccessToken = suTokens.access_token || suTokens.accessToken;
     const uidType = await this._detectUidType(session.instanceUrl, rawAccessToken, session.uid);
@@ -361,10 +362,10 @@ class SUMcpOAuthProvider {
   async exchangeAuthorizationCode(client, authorizationCode) {
     const codeData = await this.store.getAuthCode(authorizationCode);
     if (!codeData) {
-      console.error(`[OAuth] token exchange failed — invalid or expired auth code`);
+      log(`[OAuth] token exchange failed — invalid or expired auth code`);
       throw new Error("Invalid or expired authorization code");
     }
-    console.error(`[OAuth] token exchange — access token issued for client: ${client.client_id?.slice(0, 8)}...`);
+    log(`[OAuth] token exchange — access token issued for client: ${client.client_id?.slice(0, 8)}...`);
 
     await this.store.deleteAuthCode(authorizationCode);
 
@@ -399,10 +400,10 @@ class SUMcpOAuthProvider {
   async exchangeRefreshToken(client, refreshToken, scopes) {
     const refreshData = await this.store.getRefreshToken(refreshToken);
     if (!refreshData) {
-      console.error(`[OAuth] token refresh failed — invalid or expired refresh token for client: ${client.client_id?.slice(0, 8)}...`);
+      log(`[OAuth] token refresh failed — invalid or expired refresh token for client: ${client.client_id?.slice(0, 8)}...`);
       throw new Error("Invalid or expired refresh token");
     }
-    console.error(`[OAuth] token refresh — new access token issued for client: ${client.client_id?.slice(0, 8)}...`);
+    log(`[OAuth] token refresh — new access token issued for client: ${client.client_id?.slice(0, 8)}...`);
 
     const accessToken = generateToken();
     const newRefreshToken = generateToken();

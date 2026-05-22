@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { log } from "../logger.js";
 
 const ENCRYPTION_ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
@@ -159,7 +160,7 @@ class RedisStore {
       });
       this.redis.on("error", (err) => {
         this.connected = false;
-        console.error("[Redis] Connection error:", err.message);
+        log("[Redis] Connection error:", err.message);
       });
       this.redis.on("connect", () => { this.connected = true; });
       this.redis.on("close", () => { this.connected = false; });
@@ -168,7 +169,7 @@ class RedisStore {
       return true;
     } catch (err) {
       this.connected = false;
-      console.error("[Redis] Failed to connect:", err.message);
+      log("[Redis] Failed to connect:", err.message);
       return false;
     }
   }
@@ -209,7 +210,7 @@ class RedisStore {
     try {
       return decryptPayload(d, true);
     } catch (err) {
-      console.error(`[Redis] getAccessToken — decrypt error: ${err.message}`);
+      log(`[Redis] getAccessToken — decrypt error: ${err.message}`);
       return null;
     }
   }
@@ -233,10 +234,10 @@ class RedisStore {
 function createStore(redisUrl) {
   const url = redisUrl || process.env.REDIS_URL;
   if (url) {
-    console.error("[Store] Using Redis store");
+    log("[Store] Using Redis store");
     return new RedisStore(url);
   }
-  console.error("[Store] Using in-memory store (tokens lost on restart)");
+  log("[Store] Using in-memory store (tokens lost on restart)");
   return new MemoryStore();
 }
 

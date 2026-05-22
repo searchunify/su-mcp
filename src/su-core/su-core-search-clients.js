@@ -1,5 +1,6 @@
 import { formatForClaude } from "./../utils.js";
 import { getSearchClientsToolAnnotations } from "../tool-annotations-meta.js";
+import { log } from "../logger.js";
 
 const initializeSearchClientsTools = async ({ server, creds, getCreds }) => {
   const credsForRequest = async () => (getCreds ? await getCreds() : creds);
@@ -12,15 +13,15 @@ const initializeSearchClientsTools = async ({ server, creds, getCreds }) => {
     async () => {
       const c = await credsForRequest();
       if (!c) {
-        console.error(`[SearchClients] unauthenticated`);
+        log(`[SearchClients] unauthenticated`);
         return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
       }
-      console.error(`[SearchClients] fetching search clients`);
+      log(`[SearchClients] fetching search clients`);
       const SearchClients = c.suRestClient.SearchClients();
       const response = await SearchClients.getSearchClients();
 
       if (!response?.data) {
-        console.error(`[SearchClients] API error — empty response`);
+        log(`[SearchClients] API error — empty response`);
         return { type: "text", text: "Error: no data in search clients response." };
       }
 

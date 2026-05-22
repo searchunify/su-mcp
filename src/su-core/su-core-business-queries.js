@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { log } from "../logger.js";
 import {
   computeSearchNoClickRatio,
   normalizeSdkResult,
@@ -823,7 +824,7 @@ export const initializeExecutiveBusinessQueryTools = async ({
     async (args) => {
       const credsForRequest = await Promise.resolve(c());
       const { recipeId, ...input } = args;
-      console.error(`[ExecutiveQuery] recipeId: ${recipeId}`);
+      log(`[ExecutiveQuery] recipeId: ${recipeId}`);
       try {
         let payload;
         switch (recipeId) {
@@ -877,7 +878,7 @@ export const initializeExecutiveBusinessQueryTools = async ({
         }
         return jsonResult(payload);
       } catch (e) {
-        console.error(`[ExecutiveQuery] error — recipeId: ${recipeId}, message: ${e?.message ?? String(e)}`);
+        log(`[ExecutiveQuery] error — recipeId: ${recipeId}, message: ${e?.message ?? String(e)}`);
         return jsonResult({
           error: e?.message ?? String(e),
           recipeId,

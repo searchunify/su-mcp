@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { formatForClaude } from "./../utils.js";
 import { analyticsToolAnnotations } from "../tool-annotations-meta.js";
+import { log } from "../logger.js";
 import {
   RECIPES,
   executiveOptionsForAnalyticsTool,
@@ -801,7 +802,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
       let analyticsResponse = {};
       switch (reportType) {
         case reportTypes.searchQueryWithNoClicks: {
-          console.error("searchQueryWithNoClicks triggered");
+          log("searchQueryWithNoClicks triggered");
           analyticsResponse = await Analytics.searchQueryWithNoClicks({
             ...searchClientScope(args, credsForRequest),
             startDate, endDate, count, pageNumber, sortByField, sortType,
@@ -809,7 +810,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.searchQueryWithResult: {
-          console.error("searchQueryWithResult triggered");
+          log("searchQueryWithResult triggered");
           analyticsResponse = await Analytics.searchQueryWithResult({
             ...searchClientScope(args, credsForRequest),
             startDate, endDate, count, pageNumber, sortByField, sortType,
@@ -817,7 +818,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.searchQueryWithoutResults: {
-          console.error("searchQueryWithoutResults triggered");
+          log("searchQueryWithoutResults triggered");
           analyticsResponse = await Analytics.searchQueryWithoutResults({
             ...searchClientScope(args, credsForRequest),
             startDate, endDate, count, pageNumber, sortByField, sortType,
@@ -825,7 +826,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.getAllSearchQuery: {
-          console.error("getAllSearchQuery triggered");
+          log("getAllSearchQuery triggered");
           analyticsResponse = await Analytics.getAllSearchQuery({
             ...searchClientScope(args, credsForRequest),
             startDate, endDate, count, pageNumber, sortByField, sortType,
@@ -833,12 +834,12 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.getAllSearchConversion: {
-          console.error("getAllSearchConversion triggered");
+          log("getAllSearchConversion triggered");
           analyticsResponse = await Analytics.getAllSearchConversion({ ...searchClientScope(args, credsForRequest), startDate, endDate, count });
           break;
         }
         case reportTypes.averageClickPosition: {
-          console.error("averageClickPosition triggered");
+          log("averageClickPosition triggered");
           analyticsResponse = await Analytics.getAverageClickPosition({
             ...searchClientScope(args, credsForRequest),
             startDate, endDate, internalUser: "all",
@@ -846,7 +847,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.sessionDetails: {
-          console.error("sessionDetails triggered");
+          log("sessionDetails triggered");
           const sessionParams = {
             searchClientId: resolvedSearchClientUid(args, credsForRequest),
             startDate,
@@ -865,7 +866,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.sessionList: {
-          console.error("sessionList triggered");
+          log("sessionList triggered");
           const sessionParams = {
             searchClientId: resolvedSearchClientUid(args, credsForRequest),
             startDate,
@@ -884,7 +885,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.tileDataContent: {
-          console.error("tileDataContent triggered");
+          log("tileDataContent triggered");
           const tileParams = {
             startDate,
             endDate,
@@ -903,7 +904,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         // case reportTypes.contentSplitTileDataContent: {
-        //   console.error("contentSplitTileDataContent triggered");
+        //   log("contentSplitTileDataContent triggered");
         //   if (!args.ecoSystemId) {
         //     return jsonTextResult({
         //       error:
@@ -918,14 +919,14 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         //   break;
         // }
         case reportTypes.contentUnsuccessfulSummaryChart: {
-          console.error("contentUnsuccessfulSummaryChart triggered");
+          log("contentUnsuccessfulSummaryChart triggered");
           analyticsResponse = await Analytics.postContentUnsuccessfulSummaryChart(
             conversionPostBase(args, credsForRequest)
           );
           break;
         }
         case reportTypes.contentSearchesWithNoClicks: {
-          console.error("contentSearchesWithNoClicks triggered");
+          log("contentSearchesWithNoClicks triggered");
           analyticsResponse = await Analytics.postOverviewSearchesWithNoClicks({
             ...conversionPostBase(args, credsForRequest),
             searchQuery: contentGapSearchQuery ?? "",
@@ -938,7 +939,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.contentSuccessiveNoClicks: {
-          console.error("contentSuccessiveNoClicks triggered");
+          log("contentSuccessiveNoClicks triggered");
           const txt = contentGapText?.trim();
           if (!txt) {
             return jsonTextResult({
@@ -953,7 +954,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.contentSearchesWithNoResult: {
-          console.error("contentSearchesWithNoResult triggered");
+          log("contentSearchesWithNoResult triggered");
           const actionStatusFilters = resolvedContentGapActionStatusFilters(contentGapActionStatusFilters);
           analyticsResponse = await Analytics.postOverviewSearchesWithNoResult({
             ...conversionPostBase(args, credsForRequest),
@@ -968,7 +969,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.contentSuccessiveNoResults: {
-          console.error("contentSuccessiveNoResults triggered");
+          log("contentSuccessiveNoResults triggered");
           const txt = contentGapText?.trim();
           if (!txt) {
             return jsonTextResult({
@@ -983,14 +984,14 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.contentUnsuccessfulSearchSessionChart: {
-          console.error("contentUnsuccessfulSearchSessionChart triggered");
+          log("contentUnsuccessfulSearchSessionChart triggered");
           analyticsResponse = await Analytics.postContentUnsuccessfulSearchSessionChart(
             conversionPostBase(args, credsForRequest)
           );
           break;
         }
         case reportTypes.contentArticleUsageByAgents: {
-          console.error("contentArticleUsageByAgents triggered");
+          log("contentArticleUsageByAgents triggered");
           analyticsResponse = await Analytics.postContentArticleUsageByAgents({
             ...conversionPostBase(args, credsForRequest),
             orderBy: String(contentGapOrderBy ?? "DESC").toUpperCase(),
@@ -999,7 +1000,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.contentSuccessiveArticlesUsage: {
-          console.error("contentSuccessiveArticlesUsage triggered");
+          log("contentSuccessiveArticlesUsage triggered");
           const txt = contentGapText?.trim();
           if (!txt) {
             return jsonTextResult({
@@ -1017,7 +1018,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.overviewSessionCount: {
-          console.error("overviewSessionCount triggered");
+          log("overviewSessionCount triggered");
           const tileParams = { startDate, endDate };
           if (args.ecoSystemId) {
             tileParams.ecoSystemId = args.ecoSystemId;
@@ -1042,7 +1043,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.overviewTileDataCount: {
-          console.error("overviewTileDataCount triggered");
+          log("overviewTileDataCount triggered");
           const tileScope = args.ecoSystemId
             ? { ecoSystemId: args.ecoSystemId }
             : credsForRequest.config.ecoSystemId
@@ -1052,7 +1053,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.overviewTopSearches: {
-          console.error("overviewTopSearches triggered");
+          log("overviewTopSearches triggered");
           analyticsResponse = await Analytics.postOverviewTopSearches({
             ...conversionPostBase(args, credsForRequest),
             searchQuery: contentGapSearchQuery ?? "",
@@ -1065,7 +1066,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.overviewSearchSessions: {
-          console.error("overviewSearchSessions triggered");
+          log("overviewSearchSessions triggered");
           analyticsResponse = await Analytics.postOverviewSearchSessions({
             ...conversionPostBase(args, credsForRequest),
             searchQuery: contentGapSearchQuery ?? "",
@@ -1078,7 +1079,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.overviewSearchClickPosition: {
-          console.error("overviewSearchClickPosition triggered");
+          log("overviewSearchClickPosition triggered");
           analyticsResponse = await Analytics.getOverviewSearchClickPosition({
             ...scopeParamsForOverview(args, credsForRequest),
             searchQuery: searchQuery ?? "",
@@ -1089,7 +1090,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.overviewCreatedCases: {
-          console.error("overviewCreatedCases triggered");
+          log("overviewCreatedCases triggered");
           analyticsResponse = await Analytics.getOverviewCreatedCases({
             ...scopeParamsForOverview(args, credsForRequest),
             caseUid: casesCaseUid ?? "",
@@ -1102,21 +1103,21 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.overviewFeaturedSnippet: {
-          console.error("overviewFeaturedSnippet triggered");
+          log("overviewFeaturedSnippet triggered");
           analyticsResponse = await Analytics.getOverviewFeaturedSnippet(
             scopeParamsForSimilarValidationOverview(args, credsForRequest)
           );
           break;
         }
         case reportTypes.overviewKnowledgeTitle: {
-          console.error("overviewKnowledgeTitle triggered");
+          log("overviewKnowledgeTitle triggered");
           analyticsResponse = await Analytics.getOverviewKnowledgeTitle(
             scopeParamsForSimilarValidationOverview(args, credsForRequest)
           );
           break;
         }
         case reportTypes.overviewPageRating: {
-          console.error("overviewPageRating triggered");
+          log("overviewPageRating triggered");
           analyticsResponse = await Analytics.getOverviewPageRating({
             ...scopeParamsForOverview(args, credsForRequest),
             pageNumber: pageNumber ?? 1,
@@ -1124,7 +1125,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.overviewSearchFeedback: {
-          console.error("overviewSearchFeedback triggered");
+          log("overviewSearchFeedback triggered");
           analyticsResponse = await Analytics.getOverviewSearchFeedback({
             ...scopeParamsForOverview(args, credsForRequest),
             pageNumber: pageNumber ?? 1,
@@ -1132,7 +1133,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.overviewAdvertisements: {
-          console.error("overviewAdvertisements triggered");
+          log("overviewAdvertisements triggered");
           analyticsResponse = await Analytics.getOverviewAdvertisements({
             ...scopeParamsForOverview(args, credsForRequest),
             pageNumber: pageNumber ?? 1,
@@ -1142,7 +1143,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.llmResponseFeedback: {
-          console.error("llmResponseFeedback triggered");
+          log("llmResponseFeedback triggered");
           const llmUid = resolvedSearchClientUid(args, credsForRequest);
           if (!llmUid) return { content: [{ type: "text", text: "This report requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
           analyticsResponse = await Analytics.getLlmResponseFeedback(
@@ -1151,7 +1152,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.sessionTrackingFormattedResult: {
-          console.error("sessionTrackingFormattedResult triggered");
+          log("sessionTrackingFormattedResult triggered");
           const stf = {
             startDate,
             endDate,
@@ -1170,12 +1171,12 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.conversionClicksCountContentSource: {
-          console.error("conversionClicksCountContentSource triggered");
+          log("conversionClicksCountContentSource triggered");
           analyticsResponse = await Analytics.postClicksCountContentSource(conversionPostBase(args, credsForRequest));
           break;
         }
         case reportTypes.conversionSearchSummary: {
-          console.error("conversionSearchSummary triggered");
+          log("conversionSearchSummary triggered");
           const sBody = {
             ...conversionPostBase(args, credsForRequest),
             limit: count,
@@ -1185,7 +1186,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.conversionTopClickedDocs: {
-          console.error("conversionTopClickedDocs triggered");
+          log("conversionTopClickedDocs triggered");
           const tBody = { ...conversionPostBase(args, credsForRequest) };
           if (conversionDetailLimit != null) tBody.limit = conversionDetailLimit;
           if (conversionDetailOffset != null) tBody.offset = conversionDetailOffset;
@@ -1207,7 +1208,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.conversionTopSearchesWithClicks: {
-          console.error("conversionTopSearchesWithClicks triggered");
+          log("conversionTopSearchesWithClicks triggered");
           const tsBody = { ...conversionPostBase(args, credsForRequest) };
           if (conversionDetailLimit != null) tsBody.limit = conversionDetailLimit;
           if (conversionDetailOffset != null) tsBody.offset = conversionDetailOffset;
@@ -1229,7 +1230,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.conversionCurrentRelevanceIndex: {
-          console.error("conversionCurrentRelevanceIndex triggered");
+          log("conversionCurrentRelevanceIndex triggered");
           const criUid = resolvedSearchClientUid(args, credsForRequest);
           if (!criUid) return { content: [{ type: "text", text: "This report requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
           analyticsResponse = await Analytics.postCurrentRelevanceIndex({
@@ -1239,7 +1240,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.conversionRelevanceIndex: {
-          console.error("conversionRelevanceIndex triggered");
+          log("conversionRelevanceIndex triggered");
           const riUid = resolvedSearchClientUid(args, credsForRequest);
           if (!riUid) return { content: [{ type: "text", text: "This report requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
           analyticsResponse = await Analytics.postRelevanceIndex({
@@ -1251,12 +1252,12 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.conversionCaseDeflectionStage1: {
-          console.error("conversionCaseDeflectionStage1 triggered");
+          log("conversionCaseDeflectionStage1 triggered");
           analyticsResponse = await Analytics.postCaseDeflectionStage1(conversionPostBase(args, credsForRequest));
           break;
         }
         case reportTypes.conversionSessionTrackingDetails: {
-          console.error("conversionSessionTrackingDetails triggered");
+          log("conversionSessionTrackingDetails triggered");
           const sdBody = {
             ...conversionPostBase(args, credsForRequest),
             keyword: conversionDetailKeyword ?? "",
@@ -1274,7 +1275,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.conversionDiscussions: {
-          console.error("conversionDiscussions triggered");
+          log("conversionDiscussions triggered");
           const dBody = { ...conversionPostBase(args, credsForRequest) };
           if (conversionDetailLimit != null) dBody.limit = conversionDetailLimit;
           if (conversionDetailOffset != null) dBody.offset = conversionDetailOffset;
@@ -1282,7 +1283,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.conversionAttachedArticles: {
-          console.error("conversionAttachedArticles triggered");
+          log("conversionAttachedArticles triggered");
           const attachedUid = resolvedSearchClientUid(args, credsForRequest);
           if (!attachedUid) return { content: [{ type: "text", text: "This report requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
           analyticsResponse = await Analytics.getAttachedArticles({
@@ -1299,7 +1300,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.conversionArticlesCreatedCases: {
-          console.error("conversionArticlesCreatedCases triggered");
+          log("conversionArticlesCreatedCases triggered");
           const createdUid = resolvedSearchClientUid(args, credsForRequest);
           if (!createdUid) return { content: [{ type: "text", text: "This report requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
           analyticsResponse = await Analytics.getCaseCreatedArticles({
@@ -1317,7 +1318,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.conversionArticlesDeflectedCase: {
-          console.error("conversionArticlesDeflectedCase triggered");
+          log("conversionArticlesDeflectedCase triggered");
           const deflectedUid = resolvedSearchClientUid(args, credsForRequest);
           if (!deflectedUid) return { content: [{ type: "text", text: "This report requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
           analyticsResponse = await Analytics.getCaseDeflectedArticles({
@@ -1394,7 +1395,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         case reportTypes.conversionLinkSharing: {
-          console.error("conversionLinkSharing triggered");
+          log("conversionLinkSharing triggered");
           const lsBody = {
             ...conversionPostBase(args, credsForRequest),
             limit: conversionDetailLimit ?? 10,
@@ -1439,11 +1440,11 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           break;
         }
         default:
-          console.error("invalid reportType ", reportType);
+          log("invalid reportType ", reportType);
       }
 
       if (analyticsResponse?.status === false) {
-        console.error(`[Analytics] API error — reportType: ${reportType}, message: ${analyticsResponse.message}`);
+        log(`[Analytics] API error — reportType: ${reportType}, message: ${analyticsResponse.message}`);
         return jsonTextResult({
           error: analyticsResponse.message || "analytics_request_failed",
           reportType,
@@ -1451,7 +1452,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         });
       }
       if (analyticsResponse?.data === undefined || analyticsResponse?.data === null) {
-        console.error(`[Analytics] empty response — reportType: ${reportType}`);
+        log(`[Analytics] empty response — reportType: ${reportType}`);
         return {
           content: [
             {

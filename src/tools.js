@@ -1,5 +1,6 @@
 import { initializeSuCoreTools } from "./su-core/index.js";
 import { loginToolAnnotations } from "./tool-annotations-meta.js";
+import { log } from "./logger.js";
 
 export const initializeTools = async ({ server, creds, getCreds, mcpSessionId, oauthProvider }) => {
   await initializeSuCoreTools({ server, creds, getCreds });
@@ -14,7 +15,7 @@ export const initializeTools = async ({ server, creds, getCreds, mcpSessionId, o
       {},
       loginToolAnnotations,
       async () => {
-        console.error(`[Login] login tool called — session: ${mcpSessionId.slice(0, 8)}...`);
+        log(`[Login] login tool called — session: ${mcpSessionId.slice(0, 8)}...`);
         const loginUrl = `${base}/mcp-connect/login?s=${encodeURIComponent(mcpSessionId)}`;
         return {
           content: [{

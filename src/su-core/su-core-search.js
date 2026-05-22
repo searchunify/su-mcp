@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { formatForClaude, formatArraysToString } from "./../utils.js";
+import { log } from "../logger.js";
 import {
   searchToolAnnotations,
   getFilterOptionsToolAnnotations,
@@ -24,7 +25,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
   }, searchToolAnnotations, async ({ searchString, aggregations, page, pageSize, sortBy, versionResults, uid }) => {
     const c = await credsForRequest();
     if (!c) {
-      console.error(`[Search] unauthenticated — query: "${searchString}"`);
+      log(`[Search] unauthenticated — query: "${searchString}"`);
       return { content: [{ type: "text", text: "Not authenticated. Please call the login tool first." }] };
     }
     const effectiveUid = uid?.trim() || c.config.uid;
@@ -52,11 +53,11 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     }
 
     const maskedEmail = c.config.email ? `${c.config.email[0]}****@${c.config.email.split('@')[1]}` : '(none)';
-    console.error(`[Search] query: "${searchString}" uid: ${effectiveUid} email: ${maskedEmail}`);
+    log(`[Search] query: "${searchString}" uid: ${effectiveUid} email: ${maskedEmail}`);
     const searchResponse = await Search.getSearchResults(requestParams);
 
     if(!searchResponse?.data){
-      console.error(`[Search] API error — query: "${searchString}", response: ${JSON.stringify(searchResponse)}`);
+      log(`[Search] API error — query: "${searchString}", response: ${JSON.stringify(searchResponse)}`);
       return {
         type: 'text',
         json: 'some error occured while searching, response is empty'
@@ -100,14 +101,14 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     async ({ searchString, aggregations, uid }) => {
       const c = await credsForRequest();
       if (!c) {
-        console.error(`[FilterOptions] unauthenticated — query: "${searchString}"`);
+        log(`[FilterOptions] unauthenticated — query: "${searchString}"`);
         return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
       }
       const effectiveUid = uid?.trim() || c.config.uid;
       if (!effectiveUid) {
         return { content: [{ type: "text", text: "Search requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
       }
-      console.error(`[FilterOptions] query: "${searchString}" uid: ${effectiveUid}`);
+      log(`[FilterOptions] query: "${searchString}" uid: ${effectiveUid}`);
       const Search = c.suRestClient.Search();
       const requestParams = { uid: effectiveUid, searchString, ...(c.config.email ? { email: c.config.email } : {}) };
       if (aggregations?.length) {
@@ -116,7 +117,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       const searchResponse = await Search.getSearchResults(requestParams);
 
       if (!searchResponse?.data) {
-        console.error(`[FilterOptions] API error — empty response for query: "${searchString}"`);
+        log(`[FilterOptions] API error — empty response for query: "${searchString}"`);
         return { type: "text", text: "Error: no data in search response." };
       }
 

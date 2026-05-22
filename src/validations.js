@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { log } from './logger.js';
 import { dirname } from 'path';
 import { SearchUnifyRestClient, AUTH_TYPES } from "su-sdk";
 
@@ -34,7 +35,7 @@ function validateAndLoadJSON(filePath) {
 }
 
 const validateCreds = () => {
-  console.error ('Validating creds...');
+  log('Validating creds...');
   const credsPath = path.join(__dirname, 'input', 'creds.json');
   const config = validateAndLoadJSON(credsPath);
   if(!config.uid && !config.ecoSystemId){
@@ -48,7 +49,7 @@ const validateCreds = () => {
   delete restClientConfig.ecoSystemId;
   // instance: platform base URL (e.g. https://host); su-sdk appends /api/v2/... from ANALYTICS.* — duplicate /api/v2 on instance is normalized away in SearchUnifyRestClient
   const suRestClient = new SearchUnifyRestClient(restClientConfig);
-  console.error ('created sdk connection...');
+  log('created sdk connection...');
   return {
     suRestClient,
     config
