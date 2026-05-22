@@ -1,8 +1,15 @@
 {
   "name": "searchunify-mcp",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "main": "src/index.js",
-  "keywords": ["mcp", "mcp-server", "claude", "searchunify", "search", "enterprise-search"],
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "claude",
+    "searchunify",
+    "search",
+    "enterprise-search"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/searchunify/su-mcp.git"

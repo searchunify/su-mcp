@@ -101,7 +101,7 @@ function getInstanceFormHTML({ formAction, sessionId, nonce = "" }) {
 
         <div class="fg">
           <label for="uid">Search Client UID<span class="req">*</span></label>
-          <input type="text" id="uid" name="uid" placeholder="e.g. abc123def456" autocomplete="off" spellcheck="false">
+          <input type="text" id="uid" name="uid" placeholder="e.g. 5f3a2b1c4d" autocomplete="off" spellcheck="false">
           <div class="ferr" id="e-uid"></div>
           <div class="help">Found in Admin → Search Clients</div>
         </div>
@@ -122,7 +122,7 @@ function getInstanceFormHTML({ formAction, sessionId, nonce = "" }) {
 
         <button type="submit" class="btn" id="btn">
           <div class="spin" id="spin"></div>
-          <span id="btntxt">Continue to Login</span>
+          <span id="btntxt">Connect to SearchUnify</span>
         </button>
       </form>
     </div>
@@ -210,7 +210,7 @@ function getInstanceFormHTML({ formAction, sessionId, nonce = "" }) {
     }
     function resetBtn() {
       btn.disabled = false; spin.style.display = 'none';
-      btntxt.textContent = 'Continue to Login';
+      btntxt.textContent = 'Connect to SearchUnify';
     }
 
     /* Blur / input listeners — real-time per-field feedback */
@@ -257,7 +257,7 @@ function getInstanceFormHTML({ formAction, sessionId, nonce = "" }) {
 
       /* POST via fetch — server returns { redirectUrl } or { error } */
       btn.disabled = true; spin.style.display = 'block';
-      btntxt.textContent = 'Connecting\u2026';
+      btntxt.textContent = 'Connecting to SearchUnify\u2026';
 
       var params = new URLSearchParams();
       params.append('session', document.querySelector('[name="session"]').value);

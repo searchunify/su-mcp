@@ -1,4 +1,5 @@
 import { createRequire } from "node:module";
+import { log } from "../logger.js";
 
 const require = createRequire(import.meta.url);
 const { HttpRequest, requestMethods } = require("su-sdk/src/utils/request-handler.js");
@@ -61,7 +62,7 @@ export async function resolveDirectlyViewSetting(credsForRequest, args) {
     auth
   );
   if (response?.status === false) {
-    console.error(
+    log(
       "leadership-direct-view: caseDeflectionFormulaAndSettings failed:",
       response.message || response
     );

@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { readFileSync } from "node:fs";
+import { log } from "./logger.js";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import express from "express";
@@ -53,7 +54,7 @@ async function runStdio(creds) {
   await initializeTools({ server, creds });
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("SearchUnify MCP Server running on stdio");
+  log("SearchUnify MCP Server running on stdio");
 }
 
 
@@ -74,6 +75,19 @@ function loginSuccessHTML(redirectUrl, nonce) {
 h1{color:#16a34a;font-size:20px;margin-bottom:12px}p{color:#555;font-size:14px;line-height:1.5}</style></head>
 <body><div class="card"><h1>&#10003; Login Successful</h1>
 <p>You have been connected to SearchUnify.<br>Return to Claude and continue your conversation.</p></div>${redirect}</body></html>`;
+}
+
+function loginErrorHTML(message, nonce) {
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><title>Configuration Error</title>
+<style nonce="${nonce}">body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;background:#f5f7fa;margin:0}
+.card{background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,0.08);padding:40px;max-width:480px;text-align:center}
+h1{color:#dc2626;font-size:20px;margin-bottom:12px}p{color:#555;font-size:14px;line-height:1.6}
+.hint{margin-top:16px;padding:12px;background:#fef2f2;border-radius:8px;font-size:13px;color:#b91c1c}</style></head>
+<body><div class="card"><h1>&#10060; Invalid Configuration</h1>
+<p>${message.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>
+<div class="hint">To find the correct UID, go to your SearchUnify admin panel &rarr; <strong>Search Clients</strong> (for a search client UID) or <strong>Ecosystems</strong> (for an ecosystem UID), then reconnect.</div>
+</div></body></html>`;
 }
 
 async function validateAuthorizeBody(body, store) {
@@ -124,7 +138,7 @@ async function serveStatelessMcpRequest(req, res, requestCreds) {
     const instance = requestCreds?.config?.instance ?? "unauthenticated";
     const clientId = req.auth?.clientId ? `client:${req.auth.clientId.slice(0, 8)}` : null;
     const parts = [instance, clientId].filter(Boolean).join(" ");
-    console.error(`[Tool] ${req.body.params?.name ?? "unknown"} — ${req.method} ${req.path} from ${ip} (${parts})`);
+    log(`[Tool] ${req.body.params?.name ?? "unknown"} — ${req.method} ${req.path} from ${ip} (${parts})`);
   }
   const reqServer = createMcpServer();
   const getCreds = () => requestCreds;
@@ -193,7 +207,7 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
       try {
         const existing = await oauthProvider.clientsStore.getClient(client_id);
         if (!existing) {
-          console.error(`[OAuth] /authorize — unknown client ${client_id.slice(0, 8)}..., auto-registering with redirect_uri ${redirect_uri}`);
+          log(`[OAuth] /authorize — unknown client ${client_id.slice(0, 8)}..., auto-registering with redirect_uri ${redirect_uri}`);
           await oauthProvider.clientsStore.registerClient({
             client_id,
             redirect_uris: [redirect_uri],
@@ -204,7 +218,7 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
           });
         }
       } catch (err) {
-        console.error(`[OAuth] /authorize auto-registration error: ${err.message}`);
+        log(`[OAuth] /authorize auto-registration error: ${err.message}`);
       }
     }
     next();
@@ -228,12 +242,16 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many requests, please try again later" },
+    handler: (req, res, next, options) => {
+      log(`[RateLimit] auth — ${req.method} ${req.path} from ${req.ip}`);
+      res.status(options.statusCode).json(options.message);
+    },
   });
 
   // Guard: reject OAuth requests if store is unavailable
   const requireStore = (req, res, next) => {
     if (!oauthProvider.isReady()) {
-      console.error("[OAuth] Store unavailable — rejecting request");
+      log("[OAuth] Store unavailable — rejecting request");
       return res.status(503).json({ error: "Service temporarily unavailable. Please try again later." });
     }
     next();
@@ -252,7 +270,7 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
       );
       return res.json({ redirectUrl: suAuthorizeUrl });
     } catch (err) {
-      console.error("[OAuth] Authorize start error:", err.message);
+      log("[OAuth] Authorize start error:", err.message);
       return res.status(500).json({ error: "Authorization failed. Please try again." });
     }
   });
@@ -262,7 +280,7 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
   app.all(`${basePath}/su-callback`, requireStore, authRateLimit, express.urlencoded({ extended: false, limit: "10kb" }), async (req, res) => {
     try {
       const { code, state } = { ...req.query, ...req.body };
-      console.error(`[OAuth] /su-callback received — code: ${code?.slice(0, 8)}... state: ${state?.slice(0, 8)}... (len: ${state?.length})`);
+      log(`[OAuth] /su-callback received — code: ${code?.slice(0, 8)}... state: ${state?.slice(0, 8)}... (len: ${state?.length})`);
       if (!code || !state) {
         return res.status(400).send("Missing code or state from SearchUnify");
       }
@@ -283,8 +301,12 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
       const redirectUrl = await oauthProvider.handleSuCallback(code, state);
       res.redirect(302, redirectUrl);
     } catch (err) {
-      console.error("[OAuth] SU callback error:", err.message);
-      // Don't leak internal error details to the user
+      log("[OAuth] SU callback error:", err.message);
+      if (err.code === 'INVALID_UID') {
+        const nonce = generateNonce();
+        res.set("Content-Security-Policy", `default-src 'none'; style-src 'nonce-${nonce}'; frame-ancestors 'none'`);
+        return res.status(400).type("html").send(loginErrorHTML(err.message, nonce));
+      }
       res.status(400).send("Authorization failed. Please try again.");
     }
   });
@@ -305,7 +327,7 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
 
   app.all(`${basePath}/mcp`, express.json(), bearerAuth, async (req, res) => {
     const ts = new Date().toISOString();
-    console.error(`[MCP HTTP] ${ts} ${req.method} ${basePath}/mcp (OAuth)`);
+    log(`[MCP HTTP] ${ts} ${req.method} ${basePath}/mcp (OAuth)`);
     try {
       const token = req.headers.authorization?.split(" ")[1];
       const suTokens = token ? await oauthProvider.getSuTokensForMcpToken(token) : null;
@@ -316,7 +338,7 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
       const requestCreds = buildCredsFromSuToken(suTokens);
       await serveStatelessMcpRequest(req, res, requestCreds);
     } catch (err) {
-      console.error(`[MCP] HANDLER ERROR: ${err.message}`);
+      log(`[MCP] HANDLER ERROR: ${err.message}`);
       if (!res.headersSent) res.status(500).json({ error: "server_error", error_description: err.message });
     }
   });
@@ -369,7 +391,7 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
       );
       return res.json({ redirectUrl: suAuthorizeUrl });
     } catch (err) {
-      console.error("[mcp-connect] Authorize start error:", err.message);
+      log("[mcp-connect] Authorize start error:", err.message);
       return res.status(500).json({ error: "Authorization failed. Please try again." });
     }
   });
@@ -377,10 +399,10 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
   // MCP endpoint — stateful, no OAuth middleware
   app.all("/mcp-connect", mcpRateLimit, express.json(), async (req, res) => {
     const ts = new Date().toISOString();
-    console.error(`[MCP HTTP] ${ts} ${req.method} /mcp-connect (tool-auth)`);
+    log(`[MCP HTTP] ${ts} ${req.method} /mcp-connect (tool-auth)`);
     if (req.body?.method === "tools/call") {
       const ip = req.headers["x-forwarded-for"] ?? req.ip ?? "unknown";
-      console.error(`[Tool] ${req.body.params?.name ?? "unknown"} — ${req.method} ${req.path} from ${ip}`);
+      log(`[Tool] ${req.body.params?.name ?? "unknown"} — ${req.method} ${req.path} from ${ip}`);
     }
 
     try {
@@ -424,7 +446,7 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
       await reqServer.connect(reqTransport);
       await reqTransport.handleRequest(req, res, req.body);
     } catch (err) {
-      console.error(`[mcp-connect] handler error: ${err.message}`);
+      log(`[mcp-connect] handler error: ${err.message}`);
       if (!res.headersSent) res.status(500).json({ error: "server_error", error_description: err.message });
     }
   });
@@ -447,25 +469,53 @@ function setupNonOAuthMcpRoutes(app, creds, mcpRateLimit) {
   // Non-OAuth MCP endpoint — header-based auth (backward compatible)
   app.all("/mcp", mcpRateLimit, express.json(), async (req, res) => {
     const ts = new Date().toISOString();
-    console.error(`[MCP HTTP] ${ts} ${req.method} /mcp (headers)`);
+    log(`[MCP HTTP] ${ts} ${req.method} /mcp (headers)`);
     try {
       const requestCreds = getCredsFromHeaders(req.headers || {}) || creds;
       await serveStatelessMcpRequest(req, res, requestCreds);
     } catch (err) {
-      console.error(`[MCP] headers handler error: ${err.message}`);
+      log(`[MCP] headers handler error: ${err.message}`);
       if (!res.headersSent) res.status(500).json({ error: "server_error", error_description: err.message });
+    }
+  });
+
+  // /mcp-api — header-based auth, always available regardless of OAuth mode.
+  // Intended for shared/service-account setups (e.g. Microsoft Copilot / Power Platform connectors)
+  // where an admin configures credentials once and all users share them via request headers.
+  // Use apiKey auth: searchunify-auth-type: apiKey + searchunify-api-key: <key>
+  app.options("/mcp-api", (req, res) => {
+    res.set("Access-Control-Allow-Origin", "*");
+    res.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS, DELETE");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization, mcp-session-id, Accept, searchunify-instance, searchunify-uid, searchunify-auth-type, searchunify-api-key, searchunify-oauth-client-id, searchunify-oauth-client-secret, searchunify-timeout, searchunify-ecosystem-id");
+    res.set("Access-Control-Expose-Headers", "mcp-session-id");
+    res.status(204).end();
+  });
+
+  app.all("/mcp-api", mcpRateLimit, express.json(), async (req, res) => {
+    const ts = new Date().toISOString();
+    log(`[MCP HTTP] ${ts} ${req.method} /mcp-api (api-key)`);
+    try {
+      const requestCreds = getCredsFromHeaders(req.headers || {});
+      if (!requestCreds) {
+        log(`[MCP] mcp-api unauthorized — missing headers from ${req.headers["x-forwarded-for"] ?? req.ip ?? "unknown"}`);
+        return res.status(401).json({ error: "unauthorized", error_description: "Missing or incomplete searchunify-* headers" });
+      }
+      await serveStatelessMcpRequest(req, res, requestCreds);
+    } catch (err) {
+      log(`[MCP] mcp-api handler error: ${err.message}`);
+      if (!res.headersSent) res.status(500).json({ error: "server_error", error_description: "An internal error occurred." });
     }
   });
 
   // Legacy root endpoint for backward compatibility
   app.all("/", mcpRateLimit, express.json(), async (req, res) => {
     const ts = new Date().toISOString();
-    console.error(`[MCP HTTP] ${ts} ${req.method} / (legacy)`);
+    log(`[MCP HTTP] ${ts} ${req.method} / (legacy)`);
     try {
       const requestCreds = getCredsFromHeaders(req.headers || {}) || creds;
       await serveStatelessMcpRequest(req, res, requestCreds);
     } catch (err) {
-      console.error(`[MCP] legacy handler error: ${err.message}`);
+      log(`[MCP] legacy handler error: ${err.message}`);
       if (!res.headersSent) res.status(500).json({ error: "server_error", error_description: err.message });
     }
   });
@@ -476,15 +526,15 @@ function setupNonOAuthMcpRoutes(app, creds, mcpRateLimit) {
  */
 function startServer(app, port, oauthEnabled) {
   app.listen(port, () => {
-    console.error(`SearchUnify MCP Server (HTTP) listening on http://localhost:${port}`);
+    log(`SearchUnify MCP Server (HTTP) listening on http://localhost:${port}`);
     if (oauthEnabled) {
-      console.error(`  OAuth endpoints: /authorize, /token, /register`);
-      console.error(`  OAuth metadata: /.well-known/oauth-authorization-server`);
-      console.error(`  Instance form → /authorize/start → SU login → /su-callback`);
+      log(`  OAuth endpoints: /authorize, /token, /register`);
+      log(`  OAuth metadata: /.well-known/oauth-authorization-server`);
+      log(`  Instance form → /authorize/start → SU login → /su-callback`);
     }
-    console.error(`  MCP endpoint: /mcp`);
+    log(`  MCP endpoint: /mcp`);
     if (oauthEnabled) {
-      console.error(`  Tool-auth endpoint: /mcp-connect (no OAuth — login tool returns form link)`);
+      log(`  Tool-auth endpoint: /mcp-connect (no OAuth — login tool returns form link)`);
     }
   });
 }
@@ -497,15 +547,15 @@ async function runHttp(creds, port) {
     oauthProvider = new SUMcpOAuthProvider(process.env.REDIS_URL);
     const storeConnected = await oauthProvider.connect();
     if (storeConnected) {
-      console.error("[OAuth] OAuth enabled — proxy flow via SU login");
+      log("[OAuth] OAuth enabled — proxy flow via SU login");
     } else {
-      console.error("[OAuth] WARNING: Store not reachable — OAuth disabled, server will run without OAuth");
+      log("[OAuth] WARNING: Store not reachable — OAuth disabled, server will run without OAuth");
       try { await oauthProvider.store.disconnect(); } catch {}
       oauthEnabled = false;
       oauthProvider = null;
     }
   } else {
-    console.error("[OAuth] OAuth disabled — set OAUTH_ENCRYPTION_KEY to enable (REDIS_URL optional)");
+    log("[OAuth] OAuth disabled — set OAUTH_ENCRYPTION_KEY to enable (REDIS_URL optional)");
   }
 
   const app = express();
@@ -540,8 +590,14 @@ async function runHttp(creds, port) {
 
   const healthResponse = () => ({ data: [{ serviceName: "su-mcp", currentStatus: "Operational", version: pkg.version }] });
 
-  app.get("/health", (req, res) => res.json(healthResponse()));
-  app.get("/pollApi", (req, res) => res.json(healthResponse()));
+  app.get("/health", (req, res) => {
+    log(`[HTTP] ${new Date().toISOString()} GET /health`);
+    res.json(healthResponse());
+  });
+  app.get("/pollApi", (req, res) => {
+    log(`[HTTP] ${new Date().toISOString()} GET /pollApi`);
+    res.json(healthResponse());
+  });
 
   // OpenAI domain verification — serves the challenge token at the well-known URL
   app.get("/.well-known/openai-apps-challenge", (req, res) => {
@@ -557,6 +613,10 @@ async function runHttp(creds, port) {
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many requests, please try again later" },
+    handler: (req, res, next, options) => {
+      log(`[RateLimit] mcp — ${req.method} ${req.path} from ${req.ip}`);
+      res.status(options.statusCode).json(options.message);
+    },
   });
 
   if (oauthEnabled && oauthProvider) {
@@ -588,7 +648,7 @@ async function main() {
       const creds = validateCreds();
       await runStdio(creds);
     } catch (err) {
-      console.error("validateCreds failed in TRANSPORT_BOTH mode, falling back to http only:", err?.message ?? err);
+      log("validateCreds failed in TRANSPORT_BOTH mode, falling back to http only:", err?.message ?? err);
     }
     await runHttp(null, port);
     return;
@@ -596,6 +656,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error("Fatal error in main():", error);
+  log("Fatal error in main():", error);
   process.exit(1);
 });
