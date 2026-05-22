@@ -328,6 +328,11 @@ class SUMcpOAuthProvider {
                 if (!Array.isArray(list)) { resolve('error'); return; }
                 const match = list.find((item) => item.uid === uid);
                 if (!match) { resolve('unknown'); return; }
+                if (!match.type) {
+                  log(`[OAuth] _detectUidType — type field missing for uid on ${instanceUrl}, treating as search_client. Deploy latest admin API for correct ecosystem detection.`);
+                  resolve('search_client');
+                  return;
+                }
                 resolve(match.type === 'ecosystem' ? 'ecosystem' : 'search_client');
               } catch {
                 resolve('error');

@@ -1444,11 +1444,13 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
       }
 
       if (analyticsResponse?.status === false) {
-        log(`[Analytics] API error — reportType: ${reportType}, message: ${analyticsResponse.message}`);
+        const errMsg = analyticsResponse.message?.response?.data?.message
+          || analyticsResponse.message?.message
+          || JSON.stringify(analyticsResponse.message);
+        log(`[Analytics] API error — reportType: ${reportType}, message: ${errMsg}`);
         return jsonTextResult({
-          error: analyticsResponse.message || "analytics_request_failed",
+          error: errMsg || "analytics_request_failed",
           reportType,
-          details: analyticsResponse,
         });
       }
       if (analyticsResponse?.data === undefined || analyticsResponse?.data === null) {
@@ -1462,6 +1464,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           ],
         };
       }
+      log(`[Analytics] ${reportType} completed successfully`);
       return formatForClaude(analyticsResponse.data);
     }
   );
