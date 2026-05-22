@@ -325,7 +325,10 @@ class SUMcpOAuthProvider {
               try {
                 const parsed = JSON.parse(data);
                 const list = Array.isArray(parsed) ? parsed : parsed?.data;
-                if (!Array.isArray(list)) { resolve('error'); return; }
+                if (!Array.isArray(list)) {
+                  log(`[OAuth] _detectUidType — unexpected response format from ${instanceUrl} (HTTP ${res.statusCode})`);
+                  resolve('error'); return;
+                }
                 const match = list.find((item) => item.uid === uid);
                 if (!match) { resolve('unknown'); return; }
                 if (!match.type) {
@@ -334,16 +337,24 @@ class SUMcpOAuthProvider {
                   return;
                 }
                 resolve(match.type === 'ecosystem' ? 'ecosystem' : 'search_client');
-              } catch {
+              } catch (err) {
+                log(`[OAuth] _detectUidType — failed to parse response from ${instanceUrl}: ${err.message}`);
                 resolve('error');
               }
             });
           }
         );
-        req.on("error", () => resolve('error'));
-        req.setTimeout(10000, () => { req.destroy(); resolve('error'); });
+        req.on("error", (err) => {
+          log(`[OAuth] _detectUidType — network error on ${instanceUrl}: ${err.message}`);
+          resolve('error');
+        });
+        req.setTimeout(10000, () => {
+          log(`[OAuth] _detectUidType — timeout on ${instanceUrl}`);
+          req.destroy(); resolve('error');
+        });
         req.end();
-      } catch {
+      } catch (err) {
+        log(`[OAuth] _detectUidType — unexpected error for ${instanceUrl}: ${err.message}`);
         resolve('error');
       }
     });
