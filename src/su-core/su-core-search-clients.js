@@ -11,12 +11,16 @@ const initializeSearchClientsTools = async ({ server, creds, getCreds }) => {
     getSearchClientsToolAnnotations,
     async () => {
       const c = await credsForRequest();
-      if (!c) return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
+      if (!c) {
+        console.error(`[SearchClients] unauthenticated`);
+        return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
+      }
       console.error(`[SearchClients] fetching search clients`);
       const SearchClients = c.suRestClient.SearchClients();
       const response = await SearchClients.getSearchClients();
 
       if (!response?.data) {
+        console.error(`[SearchClients] API error — empty response`);
         return { type: "text", text: "Error: no data in search clients response." };
       }
 

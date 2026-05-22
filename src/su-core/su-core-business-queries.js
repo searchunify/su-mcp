@@ -877,6 +877,7 @@ export const initializeExecutiveBusinessQueryTools = async ({
         }
         return jsonResult(payload);
       } catch (e) {
+        console.error(`[ExecutiveQuery] error — recipeId: ${recipeId}, message: ${e?.message ?? String(e)}`);
         return jsonResult({
           error: e?.message ?? String(e),
           recipeId,

@@ -241,6 +241,10 @@ function setupOAuthRoutes(app, port, oauthProvider, mcpRateLimit) {
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many requests, please try again later" },
+    handler: (req, res, next, options) => {
+      console.error(`[RateLimit] auth — ${req.method} ${req.path} from ${req.ip}`);
+      res.status(options.statusCode).json(options.message);
+    },
   });
 
   // Guard: reject OAuth requests if store is unavailable
@@ -492,6 +496,7 @@ function setupNonOAuthMcpRoutes(app, creds, mcpRateLimit) {
     try {
       const requestCreds = getCredsFromHeaders(req.headers || {});
       if (!requestCreds) {
+        console.error(`[MCP] mcp-api unauthorized — missing headers from ${req.headers["x-forwarded-for"] ?? req.ip ?? "unknown"}`);
         return res.status(401).json({ error: "unauthorized", error_description: "Missing or incomplete searchunify-* headers" });
       }
       await serveStatelessMcpRequest(req, res, requestCreds);
@@ -607,6 +612,10 @@ async function runHttp(creds, port) {
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Too many requests, please try again later" },
+    handler: (req, res, next, options) => {
+      console.error(`[RateLimit] mcp — ${req.method} ${req.path} from ${req.ip}`);
+      res.status(options.statusCode).json(options.message);
+    },
   });
 
   if (oauthEnabled && oauthProvider) {

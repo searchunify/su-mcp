@@ -23,7 +23,10 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     // sortOrder: z.enum(["asc", "desc"]).optional().describe("sort order for results, asc or desc"),
   }, searchToolAnnotations, async ({ searchString, aggregations, page, pageSize, sortBy, versionResults, uid }) => {
     const c = await credsForRequest();
-    if (!c) return { content: [{ type: "text", text: "Not authenticated. Please call the login tool first." }] };
+    if (!c) {
+      console.error(`[Search] unauthenticated — query: "${searchString}"`);
+      return { content: [{ type: "text", text: "Not authenticated. Please call the login tool first." }] };
+    }
     const effectiveUid = uid?.trim() || c.config.uid;
     if (!effectiveUid) {
       return { content: [{ type: "text", text: "Search requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
@@ -96,7 +99,10 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     getFilterOptionsToolAnnotations,
     async ({ searchString, aggregations, uid }) => {
       const c = await credsForRequest();
-      if (!c) return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
+      if (!c) {
+        console.error(`[FilterOptions] unauthenticated — query: "${searchString}"`);
+        return { content: [{ type: "text", text: "IMPORTANT: Not authenticated. You MUST call the 'login' tool first to get a login link for the user. Do not ask the user to go to settings — use the login tool." }] };
+      }
       const effectiveUid = uid?.trim() || c.config.uid;
       if (!effectiveUid) {
         return { content: [{ type: "text", text: "Search requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
@@ -110,6 +116,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       const searchResponse = await Search.getSearchResults(requestParams);
 
       if (!searchResponse?.data) {
+        console.error(`[FilterOptions] API error — empty response for query: "${searchString}"`);
         return { type: "text", text: "Error: no data in search response." };
       }
 

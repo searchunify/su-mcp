@@ -1461,7 +1461,6 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           ],
         };
       }
-      console.error("analyticsResponse", analyticsResponse.data);
       return formatForClaude(analyticsResponse.data);
     }
   );
