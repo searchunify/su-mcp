@@ -792,6 +792,7 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           }
           return jsonTextResult(payload);
         } catch (e) {
+          log(`[Analytics] executive recipe error — reportType: ${reportType}, message: ${e?.message ?? String(e)}`);
           return jsonTextResult({
             error: e?.message ?? String(e),
             reportType,
