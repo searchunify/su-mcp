@@ -329,6 +329,14 @@ class SUMcpOAuthProvider {
                   log(`[OAuth] _detectUidType — unexpected response format from ${instanceUrl} (HTTP ${res.statusCode})`);
                   resolve('error'); return;
                 }
+                const scCount = list.filter((item) => item.type === 'search_client').length;
+                const ecoCount = list.filter((item) => item.type === 'ecosystem').length;
+                const hasTypeField = list.length > 0 && list[0].type !== undefined;
+                if (!hasTypeField) {
+                  log(`[OAuth] _detectUidType — ${instanceUrl} returned ${list.length} entries, no type field (old admin API — search clients only)`);
+                } else {
+                  log(`[OAuth] _detectUidType — ${instanceUrl} returned ${scCount} search_clients, ${ecoCount} ecosystems (updated admin API)`);
+                }
                 const match = list.find((item) => item.uid === uid);
                 if (!match) { resolve('unknown'); return; }
                 if (!match.type) {

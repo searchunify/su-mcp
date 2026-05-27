@@ -261,10 +261,8 @@ function conversionPostBase(args, credsForRequest) {
   };
   if (args.ecoSystemId) {
     body.ecoId = args.ecoSystemId;
-    body.uid = null;
   } else if (credsForRequest.config.ecoSystemId) {
     body.ecoId = credsForRequest.config.ecoSystemId;
-    body.uid = null;
   } else {
     body.uid = resolvedSearchClientUid(args, credsForRequest);
     body.ecoId = null;
