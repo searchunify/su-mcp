@@ -25,6 +25,11 @@ const initializeSearchClientsTools = async ({ server, creds, getCreds }) => {
         return { type: "text", text: "Error: no data in search clients response." };
       }
 
+      const data = Array.isArray(response.data) ? response.data : [];
+      const ecosystems = data.filter(e => e.type === 'ecosystem');
+      const hasRelationship = ecosystems.some(e => Array.isArray(e.searchClients));
+      log(`[SearchClients] response received — ${data.length} entries (${ecosystems.length} ecosystems) — searchClients on ecosystem: ${hasRelationship ? 'present (admin API updated)' : 'absent (admin API not updated)'}`);
+
       return formatForClaude(response.data);
     }
   );
