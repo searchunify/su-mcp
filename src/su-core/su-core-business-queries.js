@@ -222,7 +222,6 @@ function conversionSessionBody(input, creds) {
   };
   if (input.ecoId) {
     body.ecoId = input.ecoId;
-    body.uid = null;
   } else {
     body.uid = input.uid ?? creds.config.uid;
   }
