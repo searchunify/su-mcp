@@ -74,14 +74,14 @@ const baseReportTypes = {
   conversionRelevanceIndex: "conversionRelevanceIndex",
   /**
    * POST /api/v2/conversion/caseDeflectionStage1 — admin **Session Analytics Overview** (Search-page / Stage-1 funnel; same call as Conversions → session-report-graph-new after `caseDeflectionFormulaAndSettings`).
-   * Counts are **sessions**, not unique users. Search page: `global_searches` (sessions with ≥1 search), `global_clicks` (sessions with ≥1 click on search/omnibar results), `global_no_clicks`, `global_click_exit`, `global_click_support` (clicks that continued to support). Support transitions from this funnel: `support_session`. For the full **Support page (Stage-2)** subgraph use **conversionCaseDeflectionStage2** (`support_search`, `support_clicks`, …).
+   * Counts are **sessions**, not unique users. Search page: `global_searches` (sessions with ≥1 search), `global_clicks` (sessions with ≥1 click on search/omnibar results), `global_no_clicks`, `global_click_exit`, `global_click_support` (clicks that continued to support). Support transitions from this funnel: `support_session`. For the full **Support page (Stage-2)** subgraph use **conversionCaseDeflectionStage2** (`support_search`, `support_clicks`, …). **Ecosystem scope is not supported** — always pass a search client `uid`.
    * Unique-user questions → **overviewSessionCount** (`uniqueUsersByDevice`, `uniqueUsersByEmail`; `searchUsers` is search-**session** count). Content-source / filter click tree → **conversionClicksCountContentSource**. Not **conversionSessionTrackingDetails** (session grid only).
    * **Not** Leadership dashboard: **not** *Assisted Self Solve Volume* / ASSV / KM effectiveness → use **leadershipAssistedSelfSolveVolume**; **not** *Unassisted Self Solve Volume* / USSV → **leadershipUnassistedSelfSolveVolume**. **Never** substitute this report when the user asked for Leadership ASSV/USSV or quarterly KM metrics — `global_*` session funnel ≠ Leadership rollups.
    */
   conversionCaseDeflectionStage1: "conversionCaseDeflectionStage1",
   /**
    * POST /api/v2/conversion/caseDeflectionStage2 — admin **Session Analytics Overview** Support-page / Stage-2 funnel.
-   * Same body shape as Stage 1. Fields: `support_search` (support-page sessions with searches), `support_clicks` (sessions with clicks), `support_no_clicks`, `support_click_exit`, `support_click_support`, `support_case`. Use together with **conversionCaseDeflectionStage1** for the full Search + Support funnel view.
+   * Same body shape as Stage 1. Fields: `support_search` (support-page sessions with searches), `support_clicks` (sessions with clicks), `support_no_clicks`, `support_click_exit`, `support_click_support`, `support_case`. Use together with **conversionCaseDeflectionStage1** for the full Search + Support funnel view. **Ecosystem scope is not supported** — always pass a search client `uid`.
    */
   conversionCaseDeflectionStage2: "conversionCaseDeflectionStage2",
   /** POST /api/v2/conversion/sessionDetails — Session Tracking grid (filters); not clickedResults / searchesOnClick drill-downs. */
@@ -194,6 +194,24 @@ const LEADERSHIP_LAST_SIX_QUARTERS_REPORT_TYPES = new Set([
   reportTypes.leadershipUnassistedSelfSolveVolume,
   reportTypes.leadershipAssistedSelfSolveVolume,
   reportTypes.leadershipAssistedCaseVolume,
+]);
+
+/**
+ * Report types that require a search client `uid` — ecosystem scope (`ecoSystemId`) is NOT supported for these.
+ * Checked early in the handler so the agent never attempts to call them under ecosystem scope.
+ * Keep this list in sync with any new reportType that calls `resolvedSearchClientUid` without a fallback eco path.
+ */
+const ECOSYSTEM_UNSUPPORTED_REPORT_TYPES = new Set([
+  reportTypes.conversionCaseDeflectionStage1,
+  reportTypes.conversionCaseDeflectionStage2,
+  reportTypes.conversionCurrentRelevanceIndex,
+  reportTypes.conversionRelevanceIndex,
+  reportTypes.llmResponseFeedback,
+  reportTypes.sessionDetails,
+  reportTypes.sessionList,
+  reportTypes.conversionAttachedArticles,
+  reportTypes.conversionArticlesCreatedCases,
+  reportTypes.conversionArticlesDeflectedCase,
 ]);
 
 /**
@@ -506,13 +524,15 @@ const baseAnalyticsFieldShape = {
     .string()
     .uuid()
     .optional()
-    .describe("When set, scope requests with ecoId instead of uid (mutually exclusive with creds uid on the wire)."),
+    .describe(
+      "When set, scope requests with ecoId instead of uid (mutually exclusive with creds uid on the wire). **Ecosystem scope is NOT supported** for the following reportTypes — do not pass ecoSystemId (or rely on ecosystem creds) for these; always supply a search client `uid` instead: conversionCaseDeflectionStage1, conversionCaseDeflectionStage2, conversionCurrentRelevanceIndex, conversionRelevanceIndex, llmResponseFeedback, sessionDetails, sessionList, conversionAttachedArticles, conversionArticlesCreatedCases, conversionArticlesDeflectedCase."
+    ),
   uid: z
     .string()
     .uuid()
     .optional()
     .describe(
-      "Optional search client UUID for `searchClientId` / conversion body `uid`. **Omit** to use the uid from MCP auth (same as today). When **ecoSystemId** is set, conversion POST bodies send `ecoId` and null `uid`; overview/content routes that accept **ecoSystemId** use ecosystem scope and ignore this field for `searchClientId`."
+      "Optional search client UUID for `searchClientId` / conversion body `uid`. **Omit** to use the uid from MCP auth. When **ecoSystemId** is set, most routes use ecosystem scope and this field is ignored. **uid is required (ecosystem scope not supported)** for: conversionCaseDeflectionStage1, conversionCaseDeflectionStage2, conversionCurrentRelevanceIndex, conversionRelevanceIndex, llmResponseFeedback, sessionDetails, sessionList, conversionAttachedArticles, conversionArticlesCreatedCases, conversionArticlesDeflectedCase — calling these under ecosystem scope returns an error; always pass a valid search client uuid for them."
     ),
   directlyViewSetting: z
     .boolean()
@@ -768,6 +788,15 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
             },
           ],
         };
+      }
+      const isEcosystemScope = !!(args.ecoSystemId || credsForRequest.config.ecoSystemId);
+      if (isEcosystemScope && ECOSYSTEM_UNSUPPORTED_REPORT_TYPES.has(reportType)) {
+        return jsonTextResult({
+          error: "ecosystem_scope_not_supported",
+          message: `reportType "${reportType}" requires a search client uid and does not support ecosystem scope (ecoSystemId). Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones), or choose a reportType that supports ecosystem scope.`,
+          reportType,
+          ecosystemUnsupportedReportTypes: [...ECOSYSTEM_UNSUPPORTED_REPORT_TYPES],
+        });
       }
       if (!analyticsStartEndDatesSatisfied(args)) {
         return jsonTextResult({
@@ -1258,11 +1287,17 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         }
         case reportTypes.conversionCaseDeflectionStage1: {
           log("conversionCaseDeflectionStage1 triggered");
+          if (args.ecoSystemId || credsForRequest.config.ecoSystemId) {
+            return { content: [{ type: "text", text: "This report requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
+          }
           analyticsResponse = await Analytics.postCaseDeflectionStage1(conversionPostBase(args, credsForRequest));
           break;
         }
         case reportTypes.conversionCaseDeflectionStage2: {
           log("conversionCaseDeflectionStage2 triggered");
+          if (args.ecoSystemId || credsForRequest.config.ecoSystemId) {
+            return { content: [{ type: "text", text: "This report requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
+          }
           analyticsResponse = await Analytics.postCaseDeflectionStage2(conversionPostBase(args, credsForRequest));
           break;
         }
