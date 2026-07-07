@@ -91,14 +91,14 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
 
   server.tool(
     "get-filter-options",
-    "Get available filter/facet options for a search query using SearchUnify. Uses the same search API; returns aggregationsArray (e.g. Index, Sources, Categories) with their values and counts. Optionally pass current aggregations to get options for a filtered search.",
+    "Get available filter/facet options for a search query using SearchUnify. Uses the same search API; returns aggregationsArray (e.g. Index, Sources, Categories) with their values and counts. Omit searchString (or pass \"\") to list all available filter options unscoped. Optionally pass current aggregations to get options for a filtered search.",
     {
-      searchString: z.string().min(3).max(100).describe("search query, a single word or sentence"),
+      searchString: z.string().max(100).optional().default("").describe("optional search query to scope the returned filter options; omit or pass \"\" to list all available filters"),
       aggregations: z.array(aggregationSchema).optional().describe("optional list of current filters to get filter options in context of filtered results"),
       uid: z.string().uuid().optional().describe("Optional search client UUID override. Required for ecosystem-only configs."),
     },
     getFilterOptionsToolAnnotations,
-    async ({ searchString, aggregations, uid }) => {
+    async ({ searchString = "", aggregations, uid }) => {
       const c = await credsForRequest();
       if (!c) {
         log(`[FilterOptions] unauthenticated — query: "${searchString}"`);
