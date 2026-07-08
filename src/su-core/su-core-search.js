@@ -11,6 +11,39 @@ const aggregationSchema = z.object({
   filter: z.string().describe("selected filter value (e.g. Search Clients)"),
 });
 
+// Server-injected end-user identity (NOT an LLM argument). The agentic-suite
+// connector forwards this from tool-executor, which derives it from a validated
+// JWT (Salesforce community user → profileId/contactId/accountId) or zid/zemail
+// (Zendesk → email). Used to scope results to that user (document-level security)
+// instead of the connection's static identity.
+const endUserSchema = z.object({
+  email: z.string().optional(),
+  userId: z.string().optional(),
+  profileId: z.string().optional(),
+  contactId: z.string().optional(),
+  accountId: z.string().optional(),
+  userType: z.string().optional(),
+  platform: z.string().optional(),
+}).partial().passthrough();
+
+// Map the end-user identity to the SearchUnify search REST permission params
+// (field names per su-sdk searchValidation). Falls back to the connection's
+// config email when no per-request identity is supplied (guest/unauth) so search
+// keeps working. The end-user email, when present, takes precedence.
+const buildEndUserParams = (userInfo, configEmail) => {
+  const u = userInfo && typeof userInfo === "object" ? userInfo : {};
+  const params = {};
+  const email = u.email || configEmail;
+  if (email) params.email = email;
+  if (u.userId) params.userId = u.userId;
+  if (u.profileId) params.profileId = u.profileId;
+  if (u.contactId) params.contactId = u.contactId;
+  if (u.accountId) params.accountId = u.accountId;
+  if (u.userType) params.userType = u.userType;
+
+  return params;
+};
+
 const initializeSearchTools = async ({ server, creds, getCreds }) => {
   const credsForRequest = async () => (getCreds ? await getCreds() : creds);
   server.tool("search", "Get relevant search results for a search query using SearchUnify. Optionally pass aggregations (facets) from get-filter-options to filter results.", {
@@ -21,8 +54,9 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     sortBy: z.enum(["_score", "post_time"]).optional().describe("field to sort results by, e.g. _score or post_time"),
     versionResults: z.boolean().default(false).optional().describe("Whether to use versioning for results. Defaults to false."),
     uid: z.string().uuid().optional().describe("Optional search client UUID override. Required for ecosystem-only configs."),
+    userInfo: endUserSchema.optional().describe("Server-injected end-user identity for document-level security; do not populate from user input."),
     // sortOrder: z.enum(["asc", "desc"]).optional().describe("sort order for results, asc or desc"),
-  }, searchToolAnnotations, async ({ searchString, aggregations, page, pageSize, sortBy, versionResults, uid }) => {
+  }, searchToolAnnotations, async ({ searchString, aggregations, page, pageSize, sortBy, versionResults, uid, userInfo }) => {
     const c = await credsForRequest();
     if (!c) {
       log(`[Search] unauthenticated — query: "${searchString}"`);
@@ -45,15 +79,16 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       versionResults: !!versionResults,
       ...(sortBy ? { sortby: sortBy } : {}),
       orderBy: 'desc',
-      ...(c.config.email ? { email: c.config.email } : {}),
+      ...buildEndUserParams(userInfo, c.config.email),
    };
-    
+
     if (aggregations?.length) {
       requestParams.aggregations = aggregations.map((a) => ({ type: a.type, filter: [a.filter] }));
     }
 
-    const maskedEmail = c.config.email ? `${c.config.email[0]}****@${c.config.email.split('@')[1]}` : '(none)';
-    log(`[Search] query: "${searchString}" uid: ${effectiveUid} email: ${maskedEmail}`);
+    const effectiveEmail = requestParams.email;
+    const maskedEmail = effectiveEmail ? `${effectiveEmail[0]}****@${effectiveEmail.split('@')[1]}` : '(none)';
+    log(`[Search] query: "${searchString}" uid: ${effectiveUid} email: ${maskedEmail} endUser: ${userInfo?.email ? 'yes' : 'no'}`);
     const searchResponse = await Search.getSearchResults(requestParams);
 
     if(!searchResponse?.data){
@@ -96,9 +131,10 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       searchString: z.string().max(100).optional().default("").describe("optional search query to scope the returned filter options; omit or pass \"\" to list all available filters"),
       aggregations: z.array(aggregationSchema).optional().describe("optional list of current filters to get filter options in context of filtered results"),
       uid: z.string().uuid().optional().describe("Optional search client UUID override. Required for ecosystem-only configs."),
+      userInfo: endUserSchema.optional().describe("Server-injected end-user identity for document-level security; do not populate from user input."),
     },
     getFilterOptionsToolAnnotations,
-    async ({ searchString = "", aggregations, uid }) => {
+    async ({ searchString = "", aggregations, uid, userInfo }) => {
       const c = await credsForRequest();
       if (!c) {
         log(`[FilterOptions] unauthenticated — query: "${searchString}"`);
@@ -108,9 +144,9 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       if (!effectiveUid) {
         return { content: [{ type: "text", text: "Search requires a search client UUID. Your MCP auth is configured with an ecosystem UUID. Pass the 'uid' parameter with a search client UUID (use 'get-search-clients' to find available ones)." }] };
       }
-      log(`[FilterOptions] query: "${searchString}" uid: ${effectiveUid}`);
+      log(`[FilterOptions] query: "${searchString}" uid: ${effectiveUid} endUser: ${userInfo?.email ? 'yes' : 'no'}`);
       const Search = c.suRestClient.Search();
-      const requestParams = { uid: effectiveUid, searchString, ...(c.config.email ? { email: c.config.email } : {}) };
+      const requestParams = { uid: effectiveUid, searchString, ...buildEndUserParams(userInfo, c.config.email) };
       if (aggregations?.length) {
         requestParams.aggregations = aggregations.map((a) => ({ type: a.type, filter: [a.filter] }));
       }
