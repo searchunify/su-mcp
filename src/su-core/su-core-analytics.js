@@ -150,6 +150,12 @@ const baseReportTypes = {
   overviewAdvertisements: "overviewAdvertisements",
   /** POST /api/v2/llm/llm-response-feedback — SearchUnifyGPT Feedback */
   llmResponseFeedback: "llmResponseFeedback",
+  /** POST /api/v2/overview/readAnswers — **SearchUnifyGPT Engagement → Read Answers** grid (generated responses where users clicked "Show More" to read the full answer). */
+  overviewReadAnswers: "overviewReadAnswers",
+  /** POST /api/v2/overview/citationClicks — **SearchUnifyGPT Engagement → Citation Clicks** grid (responses where users clicked a cited source). */
+  overviewCitationClicks: "overviewCitationClicks",
+  /** POST /api/v2/overview/copiedAnswers — **SearchUnifyGPT Engagement → Copied Answers** grid (responses users copied). */
+  overviewCopiedAnswers: "overviewCopiedAnswers",
   /** POST /api/v2/leadership/get-content-sources — list content sources (`elasticIndexName` and related facets). */
   leadershipGetContentSources: "leadershipGetContentSources",
   /**
@@ -231,6 +237,9 @@ const OVERVIEW_AND_LLM_FEEDBACK_REPORT_TYPES = [
   reportTypes.overviewSearchFeedback,
   reportTypes.overviewAdvertisements,
   reportTypes.llmResponseFeedback,
+  reportTypes.overviewReadAnswers,
+  reportTypes.overviewCitationClicks,
+  reportTypes.overviewCopiedAnswers,
 ];
 for (const id of OVERVIEW_AND_LLM_FEEDBACK_REPORT_TYPES) {
   if (!Object.values(baseReportTypes).includes(id)) {
@@ -363,6 +372,36 @@ const executiveReportIdSet = ENABLE_EXECUTIVE_RECIPE_REPORTS
   ? new Set(Object.values(RECIPES))
   : new Set();
 
+/**
+ * HTTP status pulled from either an axios error (thrown → `catch`) or the `su-sdk-js`
+ * `Response(false, error)` envelope (`analyticsResponse.message` is the axios error).
+ */
+function httpStatusFromAnalyticsError(errOrResponse) {
+  return (
+    errOrResponse?.response?.status ??
+    errOrResponse?.message?.response?.status ??
+    errOrResponse?.status
+  );
+}
+
+/**
+ * 404 (endpoint absent) / 501 (not implemented) → the report is not shipped in the SearchUnify
+ * release this account is on (e.g. SearchUnifyGPT Engagement grids on older platforms).
+ */
+function isReportMissingInRelease(errOrResponse) {
+  const status = httpStatusFromAnalyticsError(errOrResponse);
+  return status === 404 || status === 501;
+}
+
+/** Uniform "report not available in this release" MCP result. */
+function reportNotInReleaseResult(reportType) {
+  return jsonTextResult({
+    error: "report_not_present_in_current_release",
+    message: `The "${reportType}" report is not present in the current SearchUnify release for this account. It may require a platform upgrade; contact your SearchUnify administrator to confirm availability.`,
+    reportType,
+  });
+}
+
 function jsonTextResult(obj) {
   return {
     content: [
@@ -424,6 +463,19 @@ function paramsForLlmResponseFeedback(args, credsForRequest) {
     internalUser: internalUser ?? "all",
     searchQuery: searchQuery ?? "",
     reactionFilterType: reactionFilterType ?? "all",
+  };
+}
+
+/**
+ * Params for the SearchUnifyGPT Engagement grids (`getOverviewReadAnswers` / `getOverviewCitationClicks` /
+ * `getOverviewCopiedAnswers`; SDK `overviewUserEngagementGrid` Joi). Dates + uid/eco scope, plus `pageNumber`
+ * (→ body `offset`) and optional `searchQuery` text filter (matches the "Search Query" column search in the UI).
+ */
+function userEngagementGridParams(args, credsForRequest) {
+  return {
+    ...scopeParamsForOverview(args, credsForRequest),
+    pageNumber: args.pageNumber ?? 1,
+    searchQuery: args.searchQuery ?? "",
   };
 }
 
@@ -679,8 +731,8 @@ const analyticsInputSchemaBase = ENABLE_EXECUTIVE_RECIPE_REPORTS
   : z.object(baseAnalyticsFieldShape);
 
 const analyticsToolDescription = ENABLE_EXECUTIVE_RECIPE_REPORTS
-  ? "Analytics from SearchUnify. Raw APIs: tileDataContent, overviewSessionCount, overviewTileDataCount, **Search Classifications (four buckets—see `reportType` hint):** overviewTopSearches, overviewSearchSessions, contentSearchesWithNoClicks, contentSearchesWithNoResult, sessions (`sessionDetails`, `sessionList`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, **Session Analytics Overview** → `conversionCaseDeflectionStage1` (session funnel; Support Stage-2 not a raw `reportType`), `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Content Gap tab** (`contentUnsuccessfulSummaryChart`, `contentSuccessiveNoClicks`, `contentSuccessiveNoResults`, `contentUnsuccessfulSearchSessionChart`, `contentArticleUsageByAgents`, `contentSuccessiveArticlesUsage`) with `contentGap*` helper fields. **Disambiguation:** *User gave a search phrase and wants documents clicked in Top Clicked Searches* → **conversionClickedResults** + **clickedResultsSearchQuery**. *User gave a doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *User gave an article URL from **Articles failed / deflected** grids* → **conversionSearchesCreatedCase** or **conversionSearchesOnDeflection** or **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Session Analytics Overview** (searches/clicks, Search vs Support page): **conversionCaseDeflectionStage1** + `reportType` hint; unique users → **overviewSessionCount**. **Not** **conversionSessionTrackingDetails** for conversion drill-downs. **Overview tab** (overviewSessionCount, overviewTileDataCount, overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **Leadership dashboard** (see `reportType` hint): *Assisted Self Solve Volume* / KM effectiveness / ASSV → **`leadershipAssistedSelfSolveVolume`** (not Assisted Case Volume, not USSV, not cost savings). *Unassisted* / self solve rate / USSV → `leadershipUnassistedSelfSolveVolume`. *Assisted Case Volume* / resolved via KB → `leadershipAssistedCaseVolume` + **required** `leadershipContentSourceIndexName` (call `leadershipGetContentSources` first if not already known). *Cost Savings due to Explicit Deflection ($)* / USD → `leadershipCostSavingsExplicitDeflection` only. **Executive orchestrations (same as `executive_business_query`):** all `reportType` values in Phase 1 (traffic, search_no_click_pct, … self_solve_rate), Phase 2 (roi_case_deflection, savings_from_conversion, cases_without_self_service, direct_views_case_creation, stage2_deflection), Phase 3 (article_deflection_contrast, attach_article_case_journey, community_content_ctr, top_article_driven_cases_month, su_gpt_attribution_deferred) — use startDate/endDate. Extra executive fields (e.g. costPerCase, communityNameHints) match the executive tool. Optional **uid** (UUID) overrides the search client id from MCP auth for `searchClientId` / conversion `uid`; omit **uid** for creds default. **ecoSystemId** still selects ecosystem scope where supported. MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it."
-  : "Analytics from SearchUnify. Raw APIs: tileDataContent, overviewSessionCount, overviewTileDataCount, **Search Classifications (four buckets—see `reportType` hint):** overviewTopSearches, overviewSearchSessions, contentSearchesWithNoClicks, contentSearchesWithNoResult, sessions (`sessionDetails`, `sessionList`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, **Session Analytics Overview** → `conversionCaseDeflectionStage1`, `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Content Gap tab** (`contentUnsuccessfulSummaryChart`, `contentSuccessiveNoClicks`, `contentSuccessiveNoResults`, `contentUnsuccessfulSearchSessionChart`, `contentArticleUsageByAgents`, `contentSuccessiveArticlesUsage`) with `contentGap*` helper fields. **Disambiguation:** *Search phrase → documents clicked (Top Clicked Searches)* → **conversionClickedResults** + **clickedResultsSearchQuery**. *Doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *Article URL from **Articles failed / deflected*** → **conversionSearchesCreatedCase** / **conversionSearchesOnDeflection** / **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Session Analytics Overview:** **conversionCaseDeflectionStage1**; unique users → **overviewSessionCount**. **Not** **conversionSessionTrackingDetails** for conversion drill-downs. **Overview tab** (overviewSessionCount, overviewTileDataCount, overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **Leadership dashboard** (see `reportType` hint): *Assisted Self Solve Volume* / KM effectiveness / ASSV → **`leadershipAssistedSelfSolveVolume`**. *Unassisted* / USSV → `leadershipUnassistedSelfSolveVolume`. *Assisted Case Volume* → `leadershipAssistedCaseVolume`. *Cost Savings ($)* → `leadershipCostSavingsExplicitDeflection`. Executive recipe orchestrations are not available as `reportType` here; use the `executive_business_query` tool for those. Optional **uid** (UUID) overrides the search client id from MCP auth for `searchClientId` / conversion `uid`; omit **uid** for creds default. **ecoSystemId** still selects ecosystem scope where supported. MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it.";
+  ? "Analytics from SearchUnify. Raw APIs: tileDataContent, overviewSessionCount, overviewTileDataCount, **Search Classifications (four buckets—see `reportType` hint):** overviewTopSearches, overviewSearchSessions, contentSearchesWithNoClicks, contentSearchesWithNoResult, sessions (`sessionDetails`, `sessionList`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, **Session Analytics Overview** → `conversionCaseDeflectionStage1` (session funnel; Support Stage-2 not a raw `reportType`), `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Content Gap tab** (`contentUnsuccessfulSummaryChart`, `contentSuccessiveNoClicks`, `contentSuccessiveNoResults`, `contentUnsuccessfulSearchSessionChart`, `contentArticleUsageByAgents`, `contentSuccessiveArticlesUsage`) with `contentGap*` helper fields. **Disambiguation:** *User gave a search phrase and wants documents clicked in Top Clicked Searches* → **conversionClickedResults** + **clickedResultsSearchQuery**. *User gave a doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *User gave an article URL from **Articles failed / deflected** grids* → **conversionSearchesCreatedCase** or **conversionSearchesOnDeflection** or **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Session Analytics Overview** (searches/clicks, Search vs Support page): **conversionCaseDeflectionStage1** + `reportType` hint; unique users → **overviewSessionCount**. **Not** **conversionSessionTrackingDetails** for conversion drill-downs. **Overview tab** (overviewSessionCount, overviewTileDataCount, overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **SearchUnifyGPT Engagement** (admin SearchUnifyGPT™ Engagement report; POST grids scoped to a search client — `uid` or `ecoSystemId`, with `searchQuery` text filter and `pageNumber`): *Read Answers* (users clicked 'Show More') → **overviewReadAnswers**; *Citation Clicks* → **overviewCitationClicks**; *Copied Answers* → **overviewCopiedAnswers**. These grids may be absent on older SearchUnify releases; the tool returns `report_not_present_in_current_release` when the platform does not expose the endpoint. **Leadership dashboard** (see `reportType` hint): *Assisted Self Solve Volume* / KM effectiveness / ASSV → **`leadershipAssistedSelfSolveVolume`** (not Assisted Case Volume, not USSV, not cost savings). *Unassisted* / self solve rate / USSV → `leadershipUnassistedSelfSolveVolume`. *Assisted Case Volume* / resolved via KB → `leadershipAssistedCaseVolume` + **required** `leadershipContentSourceIndexName` (call `leadershipGetContentSources` first if not already known). *Cost Savings due to Explicit Deflection ($)* / USD → `leadershipCostSavingsExplicitDeflection` only. **Executive orchestrations (same as `executive_business_query`):** all `reportType` values in Phase 1 (traffic, search_no_click_pct, … self_solve_rate), Phase 2 (roi_case_deflection, savings_from_conversion, cases_without_self_service, direct_views_case_creation, stage2_deflection), Phase 3 (article_deflection_contrast, attach_article_case_journey, community_content_ctr, top_article_driven_cases_month, su_gpt_attribution_deferred) — use startDate/endDate. Extra executive fields (e.g. costPerCase, communityNameHints) match the executive tool. Optional **uid** (UUID) overrides the search client id from MCP auth for `searchClientId` / conversion `uid`; omit **uid** for creds default. **ecoSystemId** still selects ecosystem scope where supported. MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it."
+  : "Analytics from SearchUnify. Raw APIs: tileDataContent, overviewSessionCount, overviewTileDataCount, **Search Classifications (four buckets—see `reportType` hint):** overviewTopSearches, overviewSearchSessions, contentSearchesWithNoClicks, contentSearchesWithNoResult, sessions (`sessionDetails`, `sessionList`, `sessionTrackingFormattedResult`), **Conversions tab** (`conversionClicksCountContentSource`, `conversionSearchSummary`, `conversionTopClickedDocs`, `conversionSearchesOnClick` + `clickedDocumentUrl`, `conversionTopSearchesWithClicks`, `conversionClickedResults` + `clickedResultsSearchQuery`, `conversionCurrentRelevanceIndex`, `conversionRelevanceIndex`, **Session Analytics Overview** → `conversionCaseDeflectionStage1`, `conversionSessionTrackingDetails`, `conversionDiscussions`, `conversionAttachedArticles`, `conversionArticlesCreatedCases`, `conversionSearchesCreatedCase` + `caseDeflectionArticleUrl`, `conversionArticlesDeflectedCase`, `conversionSearchesOnDeflection` + `caseDeflectionArticleUrl`, `conversionArticlesCreatedCasesSessions` + `caseDeflectionSessionsSuccessfulDeflection`, `conversionLinkSharing`). **Content Gap tab** (`contentUnsuccessfulSummaryChart`, `contentSuccessiveNoClicks`, `contentSuccessiveNoResults`, `contentUnsuccessfulSearchSessionChart`, `contentArticleUsageByAgents`, `contentSuccessiveArticlesUsage`) with `contentGap*` helper fields. **Disambiguation:** *Search phrase → documents clicked (Top Clicked Searches)* → **conversionClickedResults** + **clickedResultsSearchQuery**. *Doc URL from **Most popular documents*** → **conversionSearchesOnClick** + **clickedDocumentUrl**. *Article URL from **Articles failed / deflected*** → **conversionSearchesCreatedCase** / **conversionSearchesOnDeflection** / **conversionArticlesCreatedCasesSessions** + **caseDeflectionArticleUrl** + **conversionSearchTypeArticle** (see `reportType` hint). **Session Analytics Overview:** **conversionCaseDeflectionStage1**; unique users → **overviewSessionCount**. **Not** **conversionSessionTrackingDetails** for conversion drill-downs. **Overview tab** (overviewSessionCount, overviewTileDataCount, overviewSearchClickPosition, overviewCreatedCases, overviewFeaturedSnippet, overviewKnowledgeTitle, overviewPageRating, overviewSearchFeedback, overviewAdvertisements, llmResponseFeedback). **SearchUnifyGPT Engagement** (admin SearchUnifyGPT™ Engagement report; POST grids scoped to a search client — `uid` or `ecoSystemId`, with `searchQuery` text filter and `pageNumber`): *Read Answers* (users clicked 'Show More') → **overviewReadAnswers**; *Citation Clicks* → **overviewCitationClicks**; *Copied Answers* → **overviewCopiedAnswers**. These grids may be absent on older SearchUnify releases; the tool returns `report_not_present_in_current_release` when the platform does not expose the endpoint. **Leadership dashboard** (see `reportType` hint): *Assisted Self Solve Volume* / KM effectiveness / ASSV → **`leadershipAssistedSelfSolveVolume`**. *Unassisted* / USSV → `leadershipUnassistedSelfSolveVolume`. *Assisted Case Volume* → `leadershipAssistedCaseVolume`. *Cost Savings ($)* → `leadershipCostSavingsExplicitDeflection`. Executive recipe orchestrations are not available as `reportType` here; use the `executive_business_query` tool for those. Optional **uid** (UUID) overrides the search client id from MCP auth for `searchClientId` / conversion `uid`; omit **uid** for creds default. **ecoSystemId** still selects ecosystem scope where supported. MCP does not expose `tenantId` as a tool parameter; where analytics requires `tenantId` in the body (same as admin), the platform proxy must inject it.";
 
 const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
   const c = async () => (getCreds ? await getCreds() : creds);
@@ -1154,6 +1206,27 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           );
           break;
         }
+        case reportTypes.overviewReadAnswers: {
+          log("overviewReadAnswers triggered");
+          analyticsResponse = await Analytics.getOverviewReadAnswers(
+            userEngagementGridParams(args, credsForRequest)
+          );
+          break;
+        }
+        case reportTypes.overviewCitationClicks: {
+          log("overviewCitationClicks triggered");
+          analyticsResponse = await Analytics.getOverviewCitationClicks(
+            userEngagementGridParams(args, credsForRequest)
+          );
+          break;
+        }
+        case reportTypes.overviewCopiedAnswers: {
+          log("overviewCopiedAnswers triggered");
+          analyticsResponse = await Analytics.getOverviewCopiedAnswers(
+            userEngagementGridParams(args, credsForRequest)
+          );
+          break;
+        }
         case reportTypes.sessionTrackingFormattedResult: {
           log("sessionTrackingFormattedResult triggered");
           const stf = {
@@ -1465,11 +1538,19 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
           log("invalid reportType ", reportType);
       }
       } catch (e) {
+        if (isReportMissingInRelease(e)) {
+          log(`[Analytics] report not present in current release — reportType: ${reportType}, httpStatus: ${httpStatusFromAnalyticsError(e)}`);
+          return reportNotInReleaseResult(reportType);
+        }
         log(`[Analytics] SDK error — reportType: ${reportType}, message: ${e?.message ?? String(e)}`);
         return jsonTextResult({ error: e?.message ?? String(e), reportType });
       }
 
       if (analyticsResponse?.status === false) {
+        if (isReportMissingInRelease(analyticsResponse)) {
+          log(`[Analytics] report not present in current release — reportType: ${reportType}, httpStatus: ${httpStatusFromAnalyticsError(analyticsResponse)}`);
+          return reportNotInReleaseResult(reportType);
+        }
         const errMsg = analyticsResponse.message?.response?.data?.message
           || analyticsResponse.message?.message
           || JSON.stringify(analyticsResponse.message);
