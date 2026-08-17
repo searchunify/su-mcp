@@ -28,7 +28,7 @@ import {
   AGENTIC_REPORT_TYPE_SET,
   agenticAnalyticsFieldShape,
   handleAgenticAnalyticsReport,
-} from "./agentic-analytics-reports.js";
+} from "../agentic-ai/agentic-analytics-reports.js";
 
 /** Admin content-gap "Searches with no result" default `actionStatusFilters` when MCP omits `contentGapActionStatusFilters`. */
 const DEFAULT_SEARCHES_WITH_NO_RESULT_ACTION_STATUS_FILTERS = [
