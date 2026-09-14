@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { jsonTextResult } from "./shared.js";
+import { jsonTextResult, resolveTrustedEmail } from "./shared.js";
 import { CASE_QA_REPORT_TYPES, caseQaParamsDescription, handleCaseQaReport } from "./case-qa.js";
 import { SUPPORT_AGENT_REPORT_TYPES, supportAgentParamsDescription, handleSupportAgentReport } from "./support-agent.js";
 import { AGENT_PARTNER_REPORT_TYPES, agentPartnerParamsDescription, handleAgentPartnerReport } from "./agent-partner.js";
@@ -39,6 +39,14 @@ export const agenticAnalyticsFieldShape = {
         "as a flat JSON object matching su-sdk-js's method signature for that reportType. Examples: " +
         `${caseQaParamsDescription}; ${supportAgentParamsDescription}; ${agentPartnerParamsDescription}; ${llmUsageParamsDescription}.`
     ),
+  userInfo: z
+    .object({})
+    .passthrough()
+    .optional()
+    .describe(
+      "Server-injected end-user identity (same field as the search tool's userInfo; NOT an LLM argument, do not populate from user input). " +
+        "Used to bind myScoreCard/myScoreCardDetails to the actual caller instead of a caller-supplied userEmail."
+    ),
 };
 
 /** Dispatches the agentic-analytics reportTypes to the domain handler that owns them. Returns null for unknown reportTypes (caller falls through to the core switch). */
@@ -49,9 +57,10 @@ export async function handleAgenticAnalyticsReport(reportType, args, credsForReq
 
   const p = args.agenticParams || {};
   const { suRestClient } = credsForRequest;
+  const identity = { email: resolveTrustedEmail(args.userInfo, credsForRequest) };
 
   const result =
-    (await handleCaseQaReport(reportType, p, suRestClient)) ??
+    (await handleCaseQaReport(reportType, p, suRestClient, identity)) ??
     (await handleSupportAgentReport(reportType, p, suRestClient)) ??
     (await handleAgentPartnerReport(reportType, p, suRestClient)) ??
     (await handleLlmUsageReport(reportType, p, suRestClient));

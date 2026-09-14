@@ -14,7 +14,8 @@ export const SUPPORT_AGENT_REPORT_TYPES = {
 };
 
 export const supportAgentParamsDescription =
-  '{"startDate"|"endDate"|"datePreset","granularity","agentIds"} for supportAgent trend/kpi/outcome/sankey reportTypes; ' +
+  '{"startDate"|"endDate"|"datePreset","granularity","agentIds"} for supportAgent trend/kpi/outcome/sankey reportTypes ' +
+  '(when the user names an agent instead of giving its uid, call supportAgentAgents first - it takes no params and lists every agent for the tenant with its uid - then pass the resolved uid(s) as agentIds; do not ask the end user for a uid); ' +
   '{"outcome","page","pageSize","sortBy","sortOrder","search", ...common} for supportAgentSessions; ' +
   '{"sessionId"} for supportAgentSessionTranscript';
 

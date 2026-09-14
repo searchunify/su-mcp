@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { formatForClaude } from "./../utils.js";
+import { formatForClaude, jsonTextResult } from "./../utils.js";
 import { analyticsToolAnnotations } from "../tool-annotations-meta.js";
 import { log } from "../logger.js";
 import {
@@ -381,17 +381,6 @@ const EXECUTIVE_RUNNERS = {
 
 const executiveReportIdSet = new Set(Object.values(ANALYTICS_EXECUTIVE_RECIPES));
 
-function jsonTextResult(obj) {
-  return {
-    content: [
-      {
-        type: "text",
-        text: JSON.stringify(obj, null, 2),
-      },
-    ],
-  };
-}
-
 /** Minimal scope for SDK `similarValidation` only (featured snippet, knowledge graph titles).
  * Omits `count` and `pageNumber` — those routes do not read them in `su-sdk-js`, and Joi rejects unknown keys
  * (e.g. `pageNumber`) if they were ever merged here by mistake. */
@@ -487,8 +476,9 @@ const baseAnalyticsFieldShape = {
     .number()
     .min(1)
     .max(500)
+    .optional()
     .describe(
-      "Row/page count (required on this tool for uniformity). Maps to `classificationCount` in executive recipes, LLM `limit`, **overviewPageRating** API `limit`, etc. Ignored on the wire for **overviewSessionCount** / **overviewTileDataCount** (no row pagination) and for **overviewFeaturedSnippet** / **overviewKnowledgeTitle** (fixed backend limits)."
+      "Row/page count. Required for most raw/executive reportTypes (a default is applied server-side if omitted); not used by Agentic Suite Analytics reportTypes (caseQa*/supportAgent*/agentPartner*/llmUsage*), which take their own pagination inside `agenticParams`. Maps to `classificationCount` in executive recipes, LLM `limit`, **overviewPageRating** API `limit`, etc. Ignored on the wire for **overviewSessionCount** / **overviewTileDataCount** (no row pagination) and for **overviewFeaturedSnippet** / **overviewKnowledgeTitle** (fixed backend limits)."
     ),
   sessionId: z
     .string()
@@ -793,7 +783,15 @@ const initializeAnalyticsTools = async ({ server, creds, getCreds }) => {
         };
       }
       if (AGENTIC_REPORT_TYPE_SET.has(reportType)) {
-        return handleAgenticAnalyticsReport(reportType, args, credsForRequest);
+        try {
+          return await handleAgenticAnalyticsReport(reportType, args, credsForRequest);
+        } catch (e) {
+          log(`[AgenticAnalytics] dispatch error — reportType: ${reportType}, message: ${e?.message ?? String(e)}`);
+          return jsonTextResult({
+            error: e?.message ?? String(e),
+            reportType,
+          });
+        }
       }
       if (!analyticsStartEndDatesSatisfied(args)) {
         return jsonTextResult({

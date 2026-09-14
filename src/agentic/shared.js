@@ -1,10 +1,18 @@
-import { formatForClaude } from "../utils.js";
+import { formatForClaude, jsonTextResult } from "../utils.js";
 import { log } from "../logger.js";
 
-export function jsonTextResult(obj) {
-  return {
-    content: [{ type: "text", text: JSON.stringify(obj, null, 2) }],
-  };
+export { jsonTextResult };
+
+/**
+ * Trusted end-user email for identity-bound reportTypes (myScoreCard/myScoreCardDetails) - the
+ * same server-injected `userInfo` the `search`/`get-filter-options` tools use (forwarded by the
+ * agentic-suite connector from a validated JWT/zemail, not an LLM argument), else the
+ * connection's own configured email. Callers of resolveTrustedEmail must let this value win
+ * over any caller-supplied identity field when present - never let agenticParams override it.
+ */
+export function resolveTrustedEmail(userInfo, credsForRequest) {
+  const injected = userInfo && typeof userInfo === "object" ? userInfo.email : undefined;
+  return injected || credsForRequest?.config?.email || undefined;
 }
 
 /** Same conventions as su-core-analytics.js: SDK Response(false, error) on failure, formatForClaude(data) on success. */

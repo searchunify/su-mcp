@@ -34,7 +34,20 @@ export const AGENT_PARTNER_REPORT_TYPES = {
 };
 
 export const agentPartnerParamsDescription =
-  '{"filters",...} for agentPartner* reportTypes (search-clients/adoption/overview/tag-trends/feedback)';
+  'agentPartner* reportTypes take FLAT fields (no "filters" wrapper) - each endpoint has its own field set: ' +
+  '{} for agentPartnerSearchClients/agentPartnerFeedbackFeatureTypes; ' +
+  '{"caseId"} for agentPartnerFeedbackAgentNames; ' +
+  '{"uid"} for agentPartnerAdoptionContentSources; ' +
+  '{"uid","indexName","filter":"monthly"|"quarterly"} for agentPartnerAdoptionRaAdoption/AhAdoption/AverageTtr; ' +
+  '{"indexName","filter"} (no uid) for agentPartnerAdoptionCaseEscalation; ' +
+  '{"uid","indexName","from","to"} for agentPartnerOverviewTileData/AgentEngagement (add "granularity" for MttrReport, "featureCategory","pageNumber","pageSize" for AgentWiseReport); ' +
+  '{"uid","agents","products","from","to","spikeThreshold","pagination":{"enabled","page","pageSize"}} for agentPartnerTagTrendsSpikeWatchlist (add "ahId" for Frequency); ' +
+  '{"uid","agents","products","from","to","topLimit"} for agentPartnerTagTrendsTopPairs; ' +
+  '{"uid","from","to"} for agentPartnerTagTrendsFilterAgents/FilterProducts; ' +
+  '{"uid","indexName","from","to","caseId","featureTypes","limit","offset","sortingField","sortType"} for agentPartnerFeedbackResponseFeedback (drop limit/offset/sortingField/sortType for Details); ' +
+  '*Export variants add {"delivery":"email"|"download","recipients","scName"} (email requires 1-5 recipients); ' +
+  'to resolve an agent named by the user (instead of its id) before filtering a feedback report, call agentPartnerFeedbackAgentNames first (optional {"caseId"}); ' +
+  'before filtering a tag-trends report by agent, call agentPartnerTagTrendsFilterAgents first ({"uid","from","to"}); do not ask the end user for an id';
 
 export async function handleAgentPartnerReport(reportType, p, suRestClient) {
   const R = AGENT_PARTNER_REPORT_TYPES;

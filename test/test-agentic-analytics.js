@@ -119,6 +119,23 @@ describe('handleCaseQaReport dispatch', () => {
     const result = await handleCaseQaReport('supportAgentAgents', {}, suRestClient);
     assert.equal(result, null);
   });
+
+  it('myScoreCard should override a caller-supplied userEmail with the trusted identity (security fix)', async () => {
+    const { suRestClient, method } = mockSuRestClient('CaseQa', 'getMyScoreCard', { status: true, data: {} });
+    await handleCaseQaReport(
+      'myScoreCard',
+      { userEmail: 'attacker@evil.com', tenantId: 't1', uid: 'u1' },
+      suRestClient,
+      { email: 'real-caller@searchunify.com' }
+    );
+    assert.equal(method.mock.calls[0].arguments[0].userEmail, 'real-caller@searchunify.com');
+  });
+
+  it('myScoreCard should fall back to the caller-supplied userEmail when no trusted identity is available', async () => {
+    const { suRestClient, method } = mockSuRestClient('CaseQa', 'getMyScoreCard', { status: true, data: {} });
+    await handleCaseQaReport('myScoreCard', { userEmail: 'someone@searchunify.com', tenantId: 't1', uid: 'u1' }, suRestClient);
+    assert.equal(method.mock.calls[0].arguments[0].userEmail, 'someone@searchunify.com');
+  });
 });
 
 describe('handleSupportAgentReport dispatch', () => {
@@ -223,5 +240,68 @@ describe('Module imports', () => {
   it('should import su-core-analytics.js (consumer of src/agentic/index.js) without error', async () => {
     const mod = await import('../src/su-core/su-core-analytics.js');
     assert.ok(mod.initializeAnalyticsTools);
+  });
+});
+
+// --- analytics tool: agentic dispatch error handling (regression) ---
+
+describe('analytics tool - agentic dispatch error handling', () => {
+  it('should catch a synchronous throw from the SDK (e.g. Joi validation) and return {error, reportType}, not propagate', async () => {
+    const { initializeAnalyticsTools } = await import('../src/su-core/su-core-analytics.js');
+
+    let analyticsHandler;
+    const server = {
+      tool: (name, _description, _schema, _annotations, handler) => {
+        if (name === 'analytics') analyticsHandler = handler;
+      },
+    };
+    // handleAgenticAnalyticsReport's ??-chain calls every domain's suRestClient.<Domain>()
+    // accessor unconditionally before checking reportType (see the aggregator test above),
+    // so all four must be present even though only CaseQa's method is expected to be invoked.
+    const creds = {
+      suRestClient: {
+        CaseQa: () => ({
+          getCaseQaDetail: () => {
+            throw new Error('"analyticsId" is required');
+          },
+        }),
+        SupportAgentAnalytics: () => ({}),
+        AgentPartnerAnalytics: () => ({}),
+        LlmUsage: () => ({}),
+      },
+    };
+
+    await initializeAnalyticsTools({ server, creds });
+    assert.equal(typeof analyticsHandler, 'function');
+
+    const result = await analyticsHandler({
+      reportType: 'caseQaDetail',
+      agenticParams: { caseId: 'c1', uid: 'u1' },
+    });
+    const parsed = JSON.parse(result.content[0].text);
+    assert.equal(parsed.reportType, 'caseQaDetail');
+    assert.match(parsed.error, /analyticsId/);
+  });
+});
+
+// --- analytics tool: top-level `count` schema (regression) ---
+
+describe('analytics tool schema - count field', () => {
+  it('should not require count (agentic reportTypes never use it; live-confirmed to 404-block every agentic call before this fix)', async () => {
+    const { initializeAnalyticsTools } = await import('../src/su-core/su-core-analytics.js');
+
+    let analyticsSchema;
+    const server = {
+      tool: (name, _description, schema) => {
+        if (name === 'analytics') analyticsSchema = schema;
+      },
+    };
+    const creds = { suRestClient: {} };
+
+    await initializeAnalyticsTools({ server, creds });
+    assert.ok(analyticsSchema?.count, 'count field should exist on the schema');
+
+    const result = analyticsSchema.count.safeParse(undefined);
+    assert.ok(result.success, 'count should be optional, not required');
   });
 });
