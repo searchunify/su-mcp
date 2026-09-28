@@ -47,7 +47,6 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     userInfo: endUserSchema.optional().describe("Server-injected end-user identity for document-level security; do not populate from user input."),
     // sortOrder: z.enum(["asc", "desc"]).optional().describe("sort order for results, asc or desc"),
   }, searchToolAnnotations, async ({ searchString, aggregations, page, pageSize, sortBy, versionResults, uid, userInfo }) => {
-    log(`[Search] searchString: ${JSON.stringify(searchString)} aggregations: ${JSON.stringify(aggregations ?? [])}`);
     const c = await credsForRequest();
     if (!c) {
       log(`[Search] unauthenticated — query: "${searchString}"`);
@@ -79,7 +78,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
 
     const effectiveEmail = requestParams.email;
     const maskedEmail = effectiveEmail ? `${effectiveEmail[0]}****@${effectiveEmail.split('@')[1]}` : '(none)';
-    log(`[Search] query: "${searchString}" uid: ${effectiveUid} email: ${maskedEmail} endUser: ${userInfo?.email ? 'yes' : 'no'}`);
+    log(`[Search] query: ${JSON.stringify(searchString)} aggregations: ${JSON.stringify(aggregations ?? [])} uid: ${effectiveUid} email: ${maskedEmail} endUser: ${userInfo?.email ? 'yes' : 'no'}`);
     const searchResponse = await Search.getSearchResults(requestParams);
 
     if(!searchResponse?.data){
@@ -90,6 +89,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
       }
     }
     const gptActive = searchResponse?.data?.searchClientSettings?.gptConfig?.gptActive;
+    log(`[Search] gptActive: ${gptActive}`);
     if(gptActive){
       const contexts = searchResponse.data.searchClientSettings.gptConfig.gptContext.split("_SULLM_");
 
