@@ -47,6 +47,7 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     userInfo: endUserSchema.optional().describe("Server-injected end-user identity for document-level security; do not populate from user input."),
     // sortOrder: z.enum(["asc", "desc"]).optional().describe("sort order for results, asc or desc"),
   }, searchToolAnnotations, async ({ searchString, aggregations, page, pageSize, sortBy, versionResults, uid, userInfo }) => {
+    log(`[Search] searchString: ${JSON.stringify(searchString)} aggregations: ${JSON.stringify(aggregations ?? [])}`);
     const c = await credsForRequest();
     if (!c) {
       log(`[Search] unauthenticated — query: "${searchString}"`);
