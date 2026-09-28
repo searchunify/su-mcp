@@ -1,8 +1,9 @@
 import { initializeSuCoreTools } from "./su-core/index.js";
 import { loginToolAnnotations } from "./tool-annotations-meta.js";
-import { log } from "./logger.js";
+import { log, withToolPayloadLogging } from "./logger.js";
 
 export const initializeTools = async ({ server, creds, getCreds, mcpSessionId, oauthProvider }) => {
+  withToolPayloadLogging(server);
   await initializeSuCoreTools({ server, creds, getCreds });
 
   // Register the login tool only on the /mcp-connect endpoint (tool-based auth flow).
