@@ -6,6 +6,11 @@ const formatRowObject = (obj) =>
     )
     .join("\n");
 
+/** Wraps a plain object as MCP text content (pretty-printed JSON). Shared by su-core-analytics.js and agentic/shared.js. */
+export const jsonTextResult = (obj) => ({
+  content: [{ type: "text", text: JSON.stringify(obj, null, 2) }],
+});
+
 /**
  * Turn analytics / list payloads into plain text for MCP tool responses.
  * Objects with **multiple** top-level arrays (e.g. `total` + `searchSessions`) are rendered
