@@ -81,6 +81,18 @@ const initializeSearchTools = async ({ server, creds, getCreds }) => {
     log(`[Search] query: ${JSON.stringify(searchString)} aggregations: ${JSON.stringify(aggregations ?? [])} uid: ${effectiveUid} email: ${maskedEmail} endUser: ${userInfo?.email ? 'yes' : 'no'}`);
     const searchResponse = await Search.getSearchResults(requestParams);
 
+    if (searchResponse?.data && c.config.instance) {
+      const resultCount = searchResponse.data?.result?.hits?.length ?? 0;
+      const trackParams = new URLSearchParams({
+        e: 'mcp_search',
+        uid: effectiveUid,
+        searchString,
+        result_count: String(resultCount),
+        r: String(Math.floor(Math.random() * 100000))
+      });
+      fetch(`${c.config.instance.replace(/\/$/, '')}/suanlytics?${trackParams.toString()}`, { method: 'GET' }).catch(() => {});
+    }
+
     if(!searchResponse?.data){
       log(`[Search] API error — query: "${searchString}", response: ${JSON.stringify(searchResponse)}`);
       return {
