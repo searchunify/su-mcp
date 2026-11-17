@@ -10,6 +10,9 @@ const fakeServer = () => {
     tool(...args) {
       registered[args[0]] = args[args.length - 1];
     },
+    registerTool(name, config, cb) {
+      registered[name] = cb;
+    },
   };
 };
 
@@ -46,6 +49,16 @@ describe("withUsageTracking", () => {
     });
     await Promise.all([server.registered.search({}), server.registered.search({})]);
     assert.equal(new Set(ids).size, 2);
+  });
+
+  it("tracks tools registered through registerTool as well", async () => {
+    const server = withUsageTracking(fakeServer());
+    const ctx = trackContextFor("owner@acme.com");
+    let seen;
+    server.registerTool("get-filter-options", { description: "desc" }, async () => { seen = ctx(); });
+    await server.registered["get-filter-options"]({ userInfo: { email: "end@acme.com" } });
+    assert.equal(seen.tool, "get-filter-options");
+    assert.equal(seen.user, "end@acme.com");
   });
 
   it("returns an empty context outside a tool call", () => {

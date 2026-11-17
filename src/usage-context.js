@@ -15,25 +15,31 @@ const emailFromToolArgs = (toolArgs) => {
   return typeof email === "string" && email.trim() ? email.trim() : undefined;
 };
 
+const runInUsageContext = (toolName, handler) => (...callArgs) =>
+  storage.run(
+    { tool: toolName, callId: randomUUID(), user: emailFromToolArgs(callArgs[0]) },
+    () => handler(...callArgs)
+  );
+
 /**
- * Patch `server.tool` so every handler registered afterwards runs inside a usage context.
- * The handler is always the last argument of `server.tool(...)`.
+ * Patch both McpServer registration APIs - `server.tool(name, ..., handler)` and
+ * `server.registerTool(name, config, handler)` - so every handler registered afterwards runs
+ * inside a usage context. In both the handler is the last argument. Must be called before any
+ * tool is registered (tools.js does this first).
  */
 export const withUsageTracking = (server) => {
-  const registerTool = server.tool.bind(server);
-  server.tool = (...registerArgs) => {
-    const toolName = registerArgs[0];
-    const handlerIndex = registerArgs.length - 1;
-    const handler = registerArgs[handlerIndex];
-    if (typeof handler === "function") {
-      registerArgs[handlerIndex] = (...callArgs) =>
-        storage.run(
-          { tool: toolName, callId: randomUUID(), user: emailFromToolArgs(callArgs[0]) },
-          () => handler(...callArgs)
-        );
-    }
-    return registerTool(...registerArgs);
-  };
+  ["tool", "registerTool"].forEach((method) => {
+    if (typeof server[method] !== "function") return;
+    const original = server[method].bind(server);
+    server[method] = (...registerArgs) => {
+      const handlerIndex = registerArgs.length - 1;
+      const handler = registerArgs[handlerIndex];
+      if (typeof handler === "function") {
+        registerArgs[handlerIndex] = runInUsageContext(registerArgs[0], handler);
+      }
+      return original(...registerArgs);
+    };
+  });
   return server;
 };
 
