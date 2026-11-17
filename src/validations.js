@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { log } from './logger.js';
+import { trackContextFor } from './usage-context.js';
 import { dirname } from 'path';
 import { SearchUnifyRestClient, AUTH_TYPES } from "su-sdk";
 
@@ -44,7 +45,7 @@ const validateCreds = () => {
   if (config.ecoSystemId) {
     config.uid = config.uid ?? null;
   }
-  const restClientConfig = { ...config, sendMcpConsumptionTrack: true };
+  const restClientConfig = { ...config, sendMcpConsumptionTrack: true, mcpTrackContext: trackContextFor(config.email) };
   delete restClientConfig.uid;
   delete restClientConfig.ecoSystemId;
   // instance: platform base URL (e.g. https://host); su-sdk appends /api/v2/... from ANALYTICS.* — duplicate /api/v2 on instance is normalized away in SearchUnifyRestClient
@@ -107,6 +108,7 @@ function getCredsFromHeaders(headers) {
   const restClientConfig = {
     ...config,
     sendMcpConsumptionTrack: true,
+    mcpTrackContext: trackContextFor(null),
   };
   delete restClientConfig.uid;
   delete restClientConfig.ecoSystemId;
@@ -132,6 +134,8 @@ function buildCredsFromSuToken(suTokens) {
       clientId: suClientId,
       clientSecret: suClientSecret,
     },
+    sendMcpConsumptionTrack: true,
+    mcpTrackContext: trackContextFor(email),
   });
   const config = { instance: instanceUrl, email: email ?? null };
   if (isEcosystem === true) {
