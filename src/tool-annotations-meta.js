@@ -60,3 +60,30 @@ export const executiveBusinessQueryToolAnnotations = {
   openWorldHint: true,
   safeForAutomation: false,
 };
+
+export const listCustomReportsToolAnnotations = {
+  title: "List Custom Reports",
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+  safeForAutomation: false,
+};
+
+export const runCustomReportToolAnnotations = {
+  title: "Run Custom Report",
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+  safeForAutomation: false,
+};
+
+export const getCustomReportFilterOptionsToolAnnotations = {
+  title: "Get Custom Report Filter Options",
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
+  safeForAutomation: false,
+};
