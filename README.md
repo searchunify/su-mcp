@@ -32,6 +32,14 @@ Performs a search query against your SearchUnify instance and returns relevant r
 | `pageSize` | `integer` | No | Number of results per page (1-100). Defaults to `10`. |
 | `sortBy` | `string` | No | Field to sort results by. Allowed values: `_score` (relevance) or `post_time` (date). |
 | `versionResults` | `boolean` | No | Whether to use versioning. Defaults to `false`. |
+| `facets` | `boolean` | No | Set `false` to skip facet counts for a faster response (results are identical). Defaults to `true`. |
+| `exactPhrase`, `withOneOrMore`, `withAllTheWords`, `allWordsSearchs`, `withoutTheWords` | `string` | No | Advanced-search clauses (exact phrase, any of, all of, none of). |
+| `startDate`, `endDate` | `string` | No | Restrict results to a date range (`YYYY-MM-DD`). |
+| `language` | `string` | No | Search language code, e.g. `en`. |
+| `mergeSources` | `boolean` | No | Merge results from multiple content sources. |
+| `createContext` | `boolean` | No | Ask SearchUnify to build the LLM context even when GPT is off. MCP output is unchanged. |
+| `contextConfig` | `object` | No | Per-request context settings (`contextCreationType`, `type`, `order`, `fragmentSize`, `numberOfFragments`, `resultsToConsider`, `llmContextWordLimit`, `wordLimitPerDocument`, `wordLimitPerField`). Invalid values are dropped by SearchUnify. |
+| `filters` | `array` | No | **Server-injected, not for the LLM.** Exact filters applied before ranking (su-search 26-aug). Entries: `{ field, op, ... }` with `op` = `in`, `not_in` (`values`), `range` (`gte`/`gt`/`lte`/`lt`), `preset` (`value`, e.g. `past_6_months`), `path` (`value` = path segments), `exists`; optional `objects: [...]` limits an entry to those content types; `{ any: [...] }` / `{ all: [...] }` groups nest 3 deep (50 conditions max). Passed through unchanged; invalid entries return an error naming the bad entry. |
 
 **Aggregation object schema:**
 
