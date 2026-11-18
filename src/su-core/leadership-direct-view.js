@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { log } from "../logger.js";
+import { trackContextFor } from "../usage-context.js";
 
 const require = createRequire(import.meta.url);
 const { HttpRequest, requestMethods } = require("su-sdk/src/utils/request-handler.js");
@@ -9,7 +10,7 @@ const CASE_DEFLECTION_FORMULA_AND_SETTINGS = "/api/v2/conversion/caseDeflectionF
 
 function restClientProps(credsForRequest) {
   const { uid: _uid, ...props } = credsForRequest.config;
-  return { ...props, sendMcpConsumptionTrack: true };
+  return { ...props, sendMcpConsumptionTrack: true, mcpTrackContext: trackContextFor(props.email) };
 }
 
 function caseDeflectionSettingsBody(args, credsForRequest) {
