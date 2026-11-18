@@ -161,6 +161,20 @@ Runs **Phase 1 executive** analytics recipes (Q11 traffic, Q12 search-without-cl
 
 ---
 
+### 7. Custom reports: `list-custom-reports`, `run-custom-report`, `get-custom-report-filter-options`
+
+Read only access to the **published** custom analytics reports of the tenant (instances with SearchUnify custom
+reports). The tenant comes from the credential. Report definitions are never returned, and nothing can be created,
+changed or published. On an instance without custom reports the tools answer "Custom reports are not available".
+
+| Tool | Parameters | Returns |
+|------|------------|---------|
+| `list-custom-reports` | `search` (optional words in the name or description) | `id`, `name`, `description`, `section`, `widget`, `columns`, `defaultRange`, `customFilters` (with `hasOptions`) |
+| `run-custom-report` | `reportId` (required); `startDate` + `endDate` (`YYYY-MM-DD`, at most 366 days; omit both for the report's default period ending today); `searchClientUids` (omit for **all** search clients); `userType` (`all`, `internal`, `external`, `externalOnly`); `page`; `pageSize` (default 20, max 50); `sortBy`, `sortDir`; `customFilters` (name -> value); `columnSearch` (column key -> text) | rows keyed by column label, `total`, `page`, `totalPages`, `totals`, notes (more pages, data available up to a day) |
+| `get-custom-report-filter-options` | `reportId`, `filterName`, `search` (optional) | the values of a dropdown or multiselect custom filter |
+
+---
+
 ## Prerequisites
 
 - A [SearchUnify](https://www.searchunify.com/) account with:
@@ -876,6 +890,9 @@ See also: [su-sdk-js README](../su-sdk-js/README.md#leadership-dashboard) (Leade
 ---
 
 ## Changelog
+
+### v2.3.0
+- Custom reports, read only: `list-custom-reports`, `run-custom-report`, `get-custom-report-filter-options` (su-sdk 2.1.8)
 
 ### v2.0.0
 - Full OAuth 2.0 proxy flow with PKCE for Claude public directory listing (`/mcp` endpoint)
